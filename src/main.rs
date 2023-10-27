@@ -31,11 +31,10 @@ impl Plugin for Implementation {
     ) -> Result<Value, LabeledError> {
         assert_eq!(name, "jwalk");
         let param: Option<Spanned<String>> = call.opt(0)?;
+        let span = input.span();
 
         let ret_val = match input {
-            Value::String { val, span } => {
-                crate::jwalk::jwalk_do_something(param, val, *span)?
-            }
+            Value::String { val, .. } => crate::jwalk::jwalk_do_something(param, val, span)?,
             v => {
                 return Err(LabeledError {
                     label: "Expected something from pipeline".into(),

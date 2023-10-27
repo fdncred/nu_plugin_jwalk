@@ -10,8 +10,5 @@ pub fn jwalk_do_something(
         Some(p) => format!("Hello, {}! with value: {}", p.item, val),
         None => format!("Hello, Default! with value: {}", val),
     };
-    Ok(Value::String {
-        val: a_val,
-        span: value_span,
-    })
+    Ok(Value::string(a_val, value_span))
 }
