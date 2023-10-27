@@ -1,6 +1,5 @@
-mod jwalk;
 use nu_plugin::{serve_plugin, EvaluatedCall, LabeledError, MsgPackSerializer, Plugin};
-use nu_protocol::{Category, PluginExample, PluginSignature, Spanned, SyntaxShape, Value};
+use nu_protocol::{Category, PluginExample, PluginSignature, Span, Spanned, SyntaxShape, Value};
 
 struct Implementation;
 
@@ -14,7 +13,7 @@ impl Plugin for Implementation {
     fn signature(&self) -> Vec<PluginSignature> {
         vec![PluginSignature::build("jwalk")
             .usage("View jwalk results")
-            .required("path", SyntaxShape::String, "path to jwalk input file")
+            .required("path", SyntaxShape::String, "path to jwalk")
             .category(Category::Experimental)
             .plugin_examples(vec![PluginExample {
                 description: "This is the example descripion".into(),
@@ -27,27 +26,25 @@ impl Plugin for Implementation {
         &mut self,
         name: &str,
         call: &EvaluatedCall,
-        input: &Value,
+        _input: &Value,
     ) -> Result<Value, LabeledError> {
         assert_eq!(name, "jwalk");
         let param: Option<Spanned<String>> = call.opt(0)?;
-        let span = input.span();
 
-        let ret_val = match input {
-            Value::String { val, .. } => crate::jwalk::jwalk_do_something(param, val, span)?,
-            v => {
-                return Err(LabeledError {
-                    label: "Expected something from pipeline".into(),
-                    msg: format!("requires some input, got {}", v.get_type()),
-                    span: Some(call.head),
-                });
-            }
-        };
+        let ret_val = jwalk_do_something(param);
 
-        Ok(ret_val)
+        ret_val
     }
 }
 
 fn main() {
     serve_plugin(&mut Implementation::new(), MsgPackSerializer);
+}
+
+pub fn jwalk_do_something(param: Option<Spanned<String>>) -> Result<Value, LabeledError> {
+    let (a_val, a_span) = match param {
+        Some(p) => (format!("Param {}", p.item), p.span),
+        None => (format!("No parameter passed"), Span::unknown()),
+    };
+    Ok(Value::string(a_val, a_span))
 }
