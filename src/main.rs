@@ -1,6 +1,6 @@
 use jwalk::{Parallelism, WalkDir};
 use nu_plugin::{serve_plugin, EvaluatedCall, LabeledError, MsgPackSerializer, Plugin};
-use nu_protocol::{Category, PluginExample, PluginSignature, Span, Spanned, SyntaxShape, Value};
+use nu_protocol::{Category, PluginExample, PluginSignature, Spanned, SyntaxShape, Value};
 
 struct Implementation;
 
@@ -61,8 +61,8 @@ impl Plugin for Implementation {
         let max_depth: Option<i64> = call.get_flag("max-depth")?;
         let threads: Option<i64> = call.get_flag("threads")?;
 
-        // if sort {
-        //     jwalk_minimal(pattern, sort, custom, skip_hidden, follow_links, min_depth, max_depth, threads)
+        // if custom {
+        //     jwalk_custom(pattern, sort, custom, skip_hidden, follow_links, min_depth, max_depth, threads)
         // } else {
         jwalk_minimal(
             pattern,
@@ -92,7 +92,6 @@ pub fn jwalk_minimal(
     max_depth: Option<i64>,
     threads: Option<i64>,
 ) -> Result<Value, LabeledError> {
-    let span_unknown = Span::unknown();
     let Some(a_val) = param else {
         return Err(LabeledError {
             label: "No pattern provided".into(),
@@ -116,9 +115,7 @@ pub fn jwalk_minimal(
         None => usize::MAX,
     };
 
-    eprintln!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads);
     let mut entry_list = vec![];
-
     let start_time = std::time::Instant::now();
 
     for entry in WalkDir::new(a_val.item.clone())
@@ -139,15 +136,14 @@ pub fn jwalk_minimal(
             Ok(e) => e,
             Err(e) => return e,
         };
-        entry_list.push(Value::string(
+        entry_list.push(Value::test_string(
             entry_display.path().display().to_string(),
-            span_unknown,
         ));
     }
     let elapsed = start_time.elapsed();
-    eprintln!("Time: {:?}", elapsed);
-    // for debugging put the perf metrics in the last row
-    entry_list.push(Value::string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads), span_unknown));
-    entry_list.push(Value::string(format!("Time: {:?}", elapsed), span_unknown));
-    Ok(Value::list(entry_list, span_unknown))
+    // for debugging put the perf metrics in the last rows
+    entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads)));
+    entry_list.push(Value::test_string(format!("Time: {:?}", elapsed)));
+
+    Ok(Value::test_list(entry_list))
 }
