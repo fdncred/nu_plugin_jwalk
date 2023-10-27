@@ -19,6 +19,11 @@ impl Plugin for Implementation {
             .switch("custom", "custom walker with process_read_dir", Some('c'))
             .switch("skip-hidden", "skip hidden files", Some('k'))
             .switch("follow-links", "follow symbolic links", Some('f'))
+            .switch(
+                "debug",
+                "print performance metrics at the end of the table",
+                Some('d'),
+            )
             .named(
                 "min-depth",
                 SyntaxShape::Int,
@@ -56,6 +61,7 @@ impl Plugin for Implementation {
         let sort = call.has_flag("sort");
         let custom = call.has_flag("custom");
         let skip_hidden = call.has_flag("skip-hidden");
+        let debug = call.has_flag("debug");
         let follow_links = call.has_flag("follow-links");
         let min_depth: Option<i64> = call.get_flag("min-depth")?;
         let max_depth: Option<i64> = call.get_flag("max-depth")?;
@@ -73,6 +79,7 @@ impl Plugin for Implementation {
             min_depth,
             max_depth,
             threads,
+            debug,
         )
         // }
     }
@@ -91,6 +98,7 @@ pub fn jwalk_minimal(
     min_depth: Option<i64>,
     max_depth: Option<i64>,
     threads: Option<i64>,
+    debug: bool,
 ) -> Result<Value, LabeledError> {
     let Some(a_val) = param else {
         return Err(LabeledError {
@@ -141,9 +149,11 @@ pub fn jwalk_minimal(
         ));
     }
     let elapsed = start_time.elapsed();
-    // for debugging put the perf metrics in the last rows
-    entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads)));
-    entry_list.push(Value::test_string(format!("Time: {:?}", elapsed)));
+    if debug {
+        // for debugging put the perf metrics in the last rows
+        entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads)));
+        entry_list.push(Value::test_string(format!("Time: {:?}", elapsed)));
+    }
 
     Ok(Value::test_list(entry_list))
 }
