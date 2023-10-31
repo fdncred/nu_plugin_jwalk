@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local};
-use jwalk::{Parallelism, WalkDirGeneric};
+use jwalk::{Parallelism, WalkDir, WalkDirGeneric};
 use nu_plugin::{serve_plugin, EvaluatedCall, LabeledError, MsgPackSerializer, Plugin};
 use nu_protocol::{record, Category, PluginExample, PluginSignature, Spanned, SyntaxShape, Value};
 use std::cmp::Ordering;
@@ -17,6 +17,7 @@ impl Plugin for Implementation {
         vec![PluginSignature::build("jwalk")
             .usage("View jwalk results")
             .required("path", SyntaxShape::String, "path to jwalk")
+            .switch("original", "run the original jwalk, 1 column", Some('o'))
             .switch("sort", "sort by file name", Some('s'))
             .switch("custom", "custom walker with process_read_dir", Some('c'))
             .switch("skip-hidden", "skip hidden files", Some('k'))
@@ -68,19 +69,33 @@ impl Plugin for Implementation {
         let min_depth: Option<i64> = call.get_flag("min-depth")?;
         let max_depth: Option<i64> = call.get_flag("max-depth")?;
         let threads: Option<i64> = call.get_flag("threads")?;
+        let original = call.has_flag("original");
 
-        jwalk_minimal(
-            pattern,
-            sort,
-            custom,
-            skip_hidden,
-            follow_links,
-            min_depth,
-            max_depth,
-            threads,
-            debug,
-        )
-        // }
+        if original {
+            jwalk_minimal(
+                pattern,
+                sort,
+                custom,
+                skip_hidden,
+                follow_links,
+                min_depth,
+                max_depth,
+                threads,
+                debug,
+            )
+        } else {
+            jwalk_generic(
+                pattern,
+                sort,
+                custom,
+                skip_hidden,
+                follow_links,
+                min_depth,
+                max_depth,
+                threads,
+                debug,
+            )
+        }
     }
 }
 
@@ -88,7 +103,7 @@ fn main() {
     serve_plugin(&mut Implementation::new(), MsgPackSerializer);
 }
 
-pub fn jwalk_minimal(
+pub fn jwalk_generic(
     param: Option<Spanned<String>>,
     sort: bool,
     custom: bool,
@@ -170,14 +185,6 @@ pub fn jwalk_minimal(
             .max_depth(maximum_depth)
             .parallelism(parallelism)
     } else {
-        // WalkDir::new(a_val.item.clone())
-        //     .sort(sort)
-        //     .skip_hidden(skip_hidden)
-        //     .follow_links(follow_links)
-        //     .min_depth(minimum_depth)
-        //     .max_depth(maximum_depth)
-        //     .parallelism(parallelism)
-
         WalkDirGeneric::<(usize, bool)>::new(std::path::Path::new(&a_val.item))
             .sort(sort)
             .skip_hidden(skip_hidden)
@@ -268,27 +275,92 @@ pub fn jwalk_minimal(
     }
     let elapsed = start_time.elapsed();
     if debug {
-        // for debugging put the perf metrics in the last rows
-        // entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads)));
-        // entry_list.push(Value::test_string(format!("Time: {:?}", elapsed)));
-        // entry_list.push(Value::test_record(record! {
-        //     "sort" => Value::test_bool(sort),
-        //     "skip_hidden" => Value::test_bool(skip_hidden),
-        //     "follow_links" => Value::test_bool(follow_links),
-        //     "min_depth" => Value::test_int(minimum_depth as i64),
-        //     "max_depth" => Value::test_int(maximum_depth as i64),
-        //     "threads" => Value::test_int(threads.unwrap_or(0)),
-        //     "time" => Value::test_string(format!("{:?}", elapsed)),
-        // }))
         entry_list.push(Value::test_record(record! {
             "path" => Value::test_string(format!("sort: {}", sort)),
             "depth" => Value::test_string(format!("skip_hidden: {}", skip_hidden)),
             "client_state" => Value::test_string(format!("follow_links: {}", follow_links)),
-            "file_name" => Value::test_string(format!("min_depth: {}", minimum_depth as i64)),
-            "is_dir" => Value::test_string(format!("max_depth: {}", maximum_depth as i64)),
+            "file_name" => Value::test_string(format!("min_depth: {}", minimum_depth)),
+            "is_dir" => Value::test_string(format!("max_depth: {}", maximum_depth)),
             "is_file" => Value::test_string(format!("threads: {}", threads.unwrap_or(0))),
             "is_symlink" => Value::test_string(format!("time: {:?}", elapsed)),
         }))
+    }
+
+    Ok(Value::test_list(entry_list))
+}
+
+pub fn jwalk_minimal(
+    param: Option<Spanned<String>>,
+    sort: bool,
+    custom: bool,
+    skip_hidden: bool,
+    follow_links: bool,
+    min_depth: Option<i64>,
+    max_depth: Option<i64>,
+    threads: Option<i64>,
+    debug: bool,
+) -> Result<Value, LabeledError> {
+    if custom {
+        return Err(LabeledError {
+            label: "Custom walker only supported without --original/-o flag".into(),
+            msg: "Please remove the custom flag".into(),
+            span: None,
+        });
+    }
+
+    let Some(a_val) = param else {
+        return Err(LabeledError {
+            label: "No pattern provided".into(),
+            msg: "Please pass a parameter to walk".into(),
+            span: None,
+        })
+    };
+
+    let parallelism = match threads {
+        Some(thread_count) => Parallelism::RayonNewPool(thread_count as usize),
+        None => Parallelism::RayonDefaultPool {
+            busy_timeout: std::time::Duration::from_secs(1),
+        },
+    };
+    let minimum_depth = match min_depth {
+        Some(m) => m as usize,
+        None => 0,
+    };
+    let maximum_depth = match max_depth {
+        Some(m) => m as usize,
+        None => usize::MAX,
+    };
+
+    let mut entry_list = vec![];
+    let start_time = std::time::Instant::now();
+
+    for entry in WalkDir::new(a_val.item.clone())
+        .sort(sort)
+        .skip_hidden(skip_hidden)
+        .follow_links(follow_links)
+        .min_depth(minimum_depth)
+        .max_depth(maximum_depth)
+        .parallelism(parallelism)
+    {
+        let entry_display = match entry.map_err(|err| {
+            return Err(LabeledError {
+                label: "Error found with jwalk entry".into(),
+                msg: err.to_string(),
+                span: Some(a_val.span),
+            });
+        }) {
+            Ok(e) => e,
+            Err(e) => return e,
+        };
+        entry_list.push(Value::test_string(
+            entry_display.path().display().to_string(),
+        ));
+    }
+    let elapsed = start_time.elapsed();
+    if debug {
+        // for debugging put the perf metrics in the last rows
+        entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads)));
+        entry_list.push(Value::test_string(format!("Time: {:?}", elapsed)));
     }
 
     Ok(Value::test_list(entry_list))
