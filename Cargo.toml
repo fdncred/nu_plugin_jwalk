@@ -14,6 +14,7 @@ jwalk = "0.8.1"
 # for local development, you can use a path dependency
 nu-plugin = { path = "../nushell/crates/nu-plugin", version = "0.86.1"}
 nu-protocol = { path = "../nushell/crates/nu-protocol", version="0.86.1"}
+chrono = "0.4.31"
 # nu-plugin = "0.80.0"
 # nu-protocol = "0.80.0"
 

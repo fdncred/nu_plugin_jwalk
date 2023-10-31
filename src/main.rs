@@ -1,6 +1,8 @@
-use jwalk::{Parallelism, WalkDir};
+use chrono::{DateTime, Local};
+use jwalk::{Parallelism, WalkDirGeneric};
 use nu_plugin::{serve_plugin, EvaluatedCall, LabeledError, MsgPackSerializer, Plugin};
-use nu_protocol::{Category, PluginExample, PluginSignature, Spanned, SyntaxShape, Value};
+use nu_protocol::{record, Category, PluginExample, PluginSignature, Spanned, SyntaxShape, Value};
+use std::cmp::Ordering;
 
 struct Implementation;
 
@@ -67,9 +69,6 @@ impl Plugin for Implementation {
         let max_depth: Option<i64> = call.get_flag("max-depth")?;
         let threads: Option<i64> = call.get_flag("threads")?;
 
-        // if custom {
-        //     jwalk_custom(pattern, sort, custom, skip_hidden, follow_links, min_depth, max_depth, threads)
-        // } else {
         jwalk_minimal(
             pattern,
             sort,
@@ -92,7 +91,7 @@ fn main() {
 pub fn jwalk_minimal(
     param: Option<Spanned<String>>,
     sort: bool,
-    _custom: bool,
+    custom: bool,
     skip_hidden: bool,
     follow_links: bool,
     min_depth: Option<i64>,
@@ -126,14 +125,68 @@ pub fn jwalk_minimal(
     let mut entry_list = vec![];
     let start_time = std::time::Instant::now();
 
-    for entry in WalkDir::new(a_val.item.clone())
-        .sort(sort)
-        .skip_hidden(skip_hidden)
-        .follow_links(follow_links)
-        .min_depth(minimum_depth)
-        .max_depth(maximum_depth)
-        .parallelism(parallelism)
-    {
+    let walk_dir = if custom {
+        WalkDirGeneric::<(usize, bool)>::new(std::path::Path::new(&a_val.item))
+            .process_read_dir(|_depth, _path, read_dir_state, children| {
+                // 1. Custom sort
+                children.sort_by(|a, b| match (a, b) {
+                    (Ok(a), Ok(b)) => a.file_name.cmp(&b.file_name),
+                    (Ok(_), Err(_)) => Ordering::Less,
+                    (Err(_), Ok(_)) => Ordering::Greater,
+                    (Err(_), Err(_)) => Ordering::Equal,
+                });
+                // 2. Custom filter
+                children.retain(|dir_entry_result| {
+                    dir_entry_result
+                        .as_ref()
+                        .map(|dir_entry| {
+                            dir_entry
+                                .file_name
+                                .to_str()
+                                .map(|s| s.starts_with('.'))
+                                .unwrap_or(false)
+                        })
+                        .unwrap_or(false)
+                });
+                // 3. Custom skip
+                children.iter_mut().for_each(|dir_entry_result| {
+                    if let Ok(dir_entry) = dir_entry_result {
+                        if dir_entry.depth == 2 {
+                            dir_entry.read_children_path = None;
+                        }
+                    }
+                });
+                // 4. Custom state
+                *read_dir_state += 1;
+                children.first_mut().map(|dir_entry_result| {
+                    if let Ok(dir_entry) = dir_entry_result {
+                        dir_entry.client_state = true;
+                    }
+                });
+            })
+            .skip_hidden(skip_hidden)
+            .follow_links(follow_links)
+            .min_depth(minimum_depth)
+            .max_depth(maximum_depth)
+            .parallelism(parallelism)
+    } else {
+        // WalkDir::new(a_val.item.clone())
+        //     .sort(sort)
+        //     .skip_hidden(skip_hidden)
+        //     .follow_links(follow_links)
+        //     .min_depth(minimum_depth)
+        //     .max_depth(maximum_depth)
+        //     .parallelism(parallelism)
+
+        WalkDirGeneric::<(usize, bool)>::new(std::path::Path::new(&a_val.item))
+            .sort(sort)
+            .skip_hidden(skip_hidden)
+            .follow_links(follow_links)
+            .min_depth(minimum_depth)
+            .max_depth(maximum_depth)
+            .parallelism(parallelism)
+    };
+    for entry in walk_dir {
         let entry_display = match entry.map_err(|err| {
             return Err(LabeledError {
                 label: "Error found with jwalk entry".into(),
@@ -144,15 +197,98 @@ pub fn jwalk_minimal(
             Ok(e) => e,
             Err(e) => return e,
         };
-        entry_list.push(Value::test_string(
-            entry_display.path().display().to_string(),
-        ));
+
+        let m = match entry_display.metadata() {
+            Ok(e) => {
+                let accessed = if let Ok(a) = e.accessed() {
+                    Some(a)
+                } else {
+                    None
+                };
+                let created = if let Ok(c) = e.created() {
+                    Some(c)
+                } else {
+                    None
+                };
+                let modified = if let Ok(m) = e.modified() {
+                    Some(m)
+                } else {
+                    None
+                };
+
+                Some((accessed, created, modified, e.len(), e.permissions()))
+            }
+            Err(_e) => None,
+        };
+
+        entry_list.push(Value::test_record(
+            record! {
+                "path" => Value::test_string(entry_display.path().display().to_string()),
+                "depth" => Value::test_int(entry_display.depth as i64),
+                "client_state" => Value::test_bool(entry_display.client_state),
+                "file_name" => Value::test_string(entry_display.file_name.to_string_lossy().to_string()),
+                "is_dir" => Value::test_bool(entry_display.file_type.is_dir()),
+                "is_file" => Value::test_bool(entry_display.file_type.is_file()),
+                "is_symlink" => Value::test_bool(entry_display.file_type.is_symlink()),
+                // "metadata" => Value::test_string(format!("{:?}", entry_display.metadata())),
+                // "read_children_path" => Value::test_string(format!("{:?}", entry_display.read_children_path)),
+                "parent_path" => Value::test_string(format!("{}", entry_display.parent_path().to_string_lossy().to_string())),
+                // "path_is_symlink" => Value::test_string(format!("{:?}", entry_display.path_is_symlink())),
+                "accessed" => match m {
+                    Some((Some(a), _, _, _, _)) => {
+                        let dt: DateTime<Local> = a.into();
+                        Value::test_date(dt.into())
+                    }
+                    _ => Value::test_string("".to_string()),
+                },
+                "created" => match m {
+                    Some((_, Some(c), _, _, _)) => {
+                        let dt: DateTime<Local> = c.into();
+                        Value::test_date(dt.into())
+                    }
+                    _ => Value::test_string("".to_string()),
+                },
+                "modified" => match m {
+                    Some((_, _, Some(modi), _, _)) => {
+                        let dt: DateTime<Local> = modi.into();
+                        Value::test_date(dt.into())
+                    }
+                    _ => Value::test_string("".to_string()),
+                },
+                "size" => match m {
+                    Some((_, _, _, l, _)) => Value::test_int(l as i64),
+                    _ => Value::test_int(0),
+                },
+                "readonly" => match m {
+                    Some((_, _, _, _, p)) => Value::test_bool(p.readonly()),
+                    _ => Value::test_string("".to_string()),
+                },
+            }
+        ))
     }
     let elapsed = start_time.elapsed();
     if debug {
         // for debugging put the perf metrics in the last rows
-        entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads)));
-        entry_list.push(Value::test_string(format!("Time: {:?}", elapsed)));
+        // entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads)));
+        // entry_list.push(Value::test_string(format!("Time: {:?}", elapsed)));
+        // entry_list.push(Value::test_record(record! {
+        //     "sort" => Value::test_bool(sort),
+        //     "skip_hidden" => Value::test_bool(skip_hidden),
+        //     "follow_links" => Value::test_bool(follow_links),
+        //     "min_depth" => Value::test_int(minimum_depth as i64),
+        //     "max_depth" => Value::test_int(maximum_depth as i64),
+        //     "threads" => Value::test_int(threads.unwrap_or(0)),
+        //     "time" => Value::test_string(format!("{:?}", elapsed)),
+        // }))
+        entry_list.push(Value::test_record(record! {
+            "path" => Value::test_string(format!("sort: {}", sort)),
+            "depth" => Value::test_string(format!("skip_hidden: {}", skip_hidden)),
+            "client_state" => Value::test_string(format!("follow_links: {}", follow_links)),
+            "file_name" => Value::test_string(format!("min_depth: {}", minimum_depth as i64)),
+            "is_dir" => Value::test_string(format!("max_depth: {}", maximum_depth as i64)),
+            "is_file" => Value::test_string(format!("threads: {}", threads.unwrap_or(0))),
+            "is_symlink" => Value::test_string(format!("time: {:?}", elapsed)),
+        }))
     }
 
     Ok(Value::test_list(entry_list))
