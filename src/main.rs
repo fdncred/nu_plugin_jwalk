@@ -2,6 +2,7 @@ use chrono::{DateTime, Local};
 use jwalk::{Parallelism, WalkDir, WalkDirGeneric};
 use nu_plugin::{serve_plugin, EvaluatedCall, LabeledError, MsgPackSerializer, Plugin};
 use nu_protocol::{record, Category, PluginExample, PluginSignature, Spanned, SyntaxShape, Value};
+use omnipath::sys_absolute;
 use std::cmp::Ordering;
 
 struct Implementation;
@@ -353,14 +354,20 @@ pub fn jwalk_minimal(
             Err(e) => return e,
         };
         entry_list.push(Value::test_string(
-            entry_display.path().display().to_string(),
+            sys_absolute(&entry_display.path())
+                .map_err(|err| LabeledError {
+                    label: "Error found using sys_absolute".into(),
+                    msg: err.to_string(),
+                    span: Some(a_val.span),
+                })?
+                .to_string_lossy()
+                .to_string(),
         ));
     }
     let elapsed = start_time.elapsed();
     if debug {
         // for debugging put the perf metrics in the last rows
-        entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads)));
-        entry_list.push(Value::test_string(format!("Time: {:?}", elapsed)));
+        entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads, elapsed)));
     }
 
     Ok(Value::test_list(entry_list))
