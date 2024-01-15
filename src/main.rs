@@ -57,6 +57,7 @@ impl Plugin for Implementation {
     fn run(
         &mut self,
         name: &str,
+        _config: &Option<Value>,
         call: &EvaluatedCall,
         _input: &Value,
     ) -> Result<Value, LabeledError> {
@@ -120,7 +121,7 @@ pub fn jwalk_generic(
             label: "No pattern provided".into(),
             msg: "Please pass a parameter to walk".into(),
             span: None,
-        })
+        });
     };
 
     let parallelism = match threads {
@@ -314,7 +315,7 @@ pub fn jwalk_minimal(
             label: "No pattern provided".into(),
             msg: "Please pass a parameter to walk".into(),
             span: None,
-        })
+        });
     };
 
     let parallelism = match threads {
