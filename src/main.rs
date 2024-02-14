@@ -63,15 +63,15 @@ impl Plugin for Implementation {
     ) -> Result<Value, LabeledError> {
         assert_eq!(name, "jwalk");
         let pattern: Option<Spanned<String>> = call.opt(0)?;
-        let sort = call.has_flag("sort");
-        let custom = call.has_flag("custom");
-        let skip_hidden = call.has_flag("skip-hidden");
-        let debug = call.has_flag("debug");
-        let follow_links = call.has_flag("follow-links");
+        let sort = call.has_flag("sort")?;
+        let custom = call.has_flag("custom")?;
+        let skip_hidden = call.has_flag("skip-hidden")?;
+        let debug = call.has_flag("debug")?;
+        let follow_links = call.has_flag("follow-links")?;
         let min_depth: Option<i64> = call.get_flag("min-depth")?;
         let max_depth: Option<i64> = call.get_flag("max-depth")?;
         let threads: Option<i64> = call.get_flag("threads")?;
-        let original = call.has_flag("original");
+        let original = call.has_flag("original")?;
 
         if original {
             jwalk_minimal(
