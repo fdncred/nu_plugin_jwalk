@@ -1,6 +1,8 @@
 use chrono::{DateTime, Local};
 use jwalk::{Parallelism, WalkDir, WalkDirGeneric};
-use nu_plugin::{serve_plugin, EvaluatedCall, LabeledError, MsgPackSerializer, Plugin};
+use nu_plugin::{
+    serve_plugin, EngineInterface, EvaluatedCall, LabeledError, MsgPackSerializer, Plugin,
+};
 use nu_protocol::{record, Category, PluginExample, PluginSignature, Spanned, SyntaxShape, Value};
 use omnipath::sys_absolute;
 use std::cmp::Ordering;
@@ -55,9 +57,9 @@ impl Plugin for Implementation {
     }
 
     fn run(
-        &mut self,
+        &self,
         name: &str,
-        _config: &Option<Value>,
+        _engine: &EngineInterface,
         call: &EvaluatedCall,
         _input: &Value,
     ) -> Result<Value, LabeledError> {
