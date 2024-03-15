@@ -2,22 +2,27 @@ use chrono::{DateTime, Local};
 use jwalk::{Parallelism, WalkDir, WalkDirGeneric};
 use nu_plugin::{
     serve_plugin, EngineInterface, EvaluatedCall, LabeledError, MsgPackSerializer, Plugin,
+    PluginCommand, SimplePluginCommand,
 };
 use nu_protocol::{record, Category, PluginExample, PluginSignature, Spanned, SyntaxShape, Value};
 use omnipath::sys_absolute;
 use std::cmp::Ordering;
 
-struct Implementation;
+struct JWalkPlugin;
 
-impl Implementation {
-    fn new() -> Self {
-        Self {}
+impl Plugin for JWalkPlugin {
+    fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
+        vec![Box::new(Implementation)]
     }
 }
 
-impl Plugin for Implementation {
-    fn signature(&self) -> Vec<PluginSignature> {
-        vec![PluginSignature::build("jwalk")
+struct Implementation;
+
+impl SimplePluginCommand for Implementation {
+    type Plugin = JWalkPlugin;
+
+    fn signature(&self) -> PluginSignature {
+        PluginSignature::build("jwalk")
             .usage("View jwalk results")
             .required("path", SyntaxShape::String, "path to jwalk")
             .switch("original", "run the original jwalk, 1 column", Some('o'))
@@ -53,17 +58,16 @@ impl Plugin for Implementation {
                 description: "This is the example descripion".into(),
                 example: "some pipeline involving jwalk".into(),
                 result: None,
-            }])]
+            }])
     }
 
     fn run(
         &self,
-        name: &str,
+        _config: &JWalkPlugin,
         _engine: &EngineInterface,
         call: &EvaluatedCall,
         _input: &Value,
     ) -> Result<Value, LabeledError> {
-        assert_eq!(name, "jwalk");
         let pattern: Option<Spanned<String>> = call.opt(0)?;
         let sort = call.has_flag("sort")?;
         let custom = call.has_flag("custom")?;
@@ -104,7 +108,7 @@ impl Plugin for Implementation {
 }
 
 fn main() {
-    serve_plugin(&mut Implementation::new(), MsgPackSerializer);
+    serve_plugin(&JWalkPlugin, MsgPackSerializer);
 }
 
 pub fn jwalk_generic(
