@@ -1,10 +1,12 @@
 use chrono::{DateTime, Local};
 use jwalk::{Parallelism, WalkDir, WalkDirGeneric};
 use nu_plugin::{
-    serve_plugin, EngineInterface, EvaluatedCall, LabeledError, MsgPackSerializer, Plugin,
-    PluginCommand, SimplePluginCommand,
+    serve_plugin, EngineInterface, EvaluatedCall, MsgPackSerializer, Plugin, PluginCommand,
+    SimplePluginCommand,
 };
-use nu_protocol::{record, Category, PluginExample, PluginSignature, Spanned, SyntaxShape, Value};
+use nu_protocol::{
+    record, Category, Example, LabeledError, Signature, Span, Spanned, SyntaxShape, Value,
+};
 use omnipath::sys_absolute;
 use std::cmp::Ordering;
 
@@ -21,9 +23,15 @@ struct Implementation;
 impl SimplePluginCommand for Implementation {
     type Plugin = JWalkPlugin;
 
-    fn signature(&self) -> PluginSignature {
-        PluginSignature::build("jwalk")
-            .usage("View jwalk results")
+    fn name(&self) -> &str {
+        "jwalk"
+    }
+
+    fn usage(&self) -> &str {
+        "View jwalk results of walking the path."
+    }
+    fn signature(&self) -> Signature {
+        Signature::build(PluginCommand::name(self))
             .required("path", SyntaxShape::String, "path to jwalk")
             .switch("original", "run the original jwalk, 1 column", Some('o'))
             .switch("sort", "sort by file name", Some('s'))
@@ -54,11 +62,14 @@ impl SimplePluginCommand for Implementation {
                 Some('t'),
             )
             .category(Category::Experimental)
-            .plugin_examples(vec![PluginExample {
-                description: "This is the example descripion".into(),
-                example: "some pipeline involving jwalk".into(),
-                result: None,
-            }])
+    }
+
+    fn examples(&self) -> Vec<Example> {
+        vec![Example {
+            description: "This is the example descripion".into(),
+            example: "some pipeline involving jwalk".into(),
+            result: None,
+        }]
     }
 
     fn run(
@@ -123,11 +134,8 @@ pub fn jwalk_generic(
     debug: bool,
 ) -> Result<Value, LabeledError> {
     let Some(a_val) = param else {
-        return Err(LabeledError {
-            label: "No pattern provided".into(),
-            msg: "Please pass a parameter to walk".into(),
-            span: None,
-        });
+        return Err(LabeledError::new("Please pass a parameter to walk")
+            .with_label("No pattern provided", Span::unknown()));
     };
 
     let parallelism = match threads {
@@ -203,14 +211,11 @@ pub fn jwalk_generic(
     };
     for entry in walk_dir {
         let entry_display = match entry.map_err(|err| {
-            return Err(LabeledError {
-                label: "Error found with jwalk entry".into(),
-                msg: err.to_string(),
-                span: Some(a_val.span),
-            });
+            LabeledError::new(err.to_string())
+                .with_label("Error found with jwalk entry", a_val.span)
         }) {
             Ok(e) => e,
-            Err(e) => return e,
+            Err(e) => return Err(e),
         };
 
         let m = match entry_display.metadata() {
@@ -309,19 +314,17 @@ pub fn jwalk_minimal(
     debug: bool,
 ) -> Result<Value, LabeledError> {
     if custom {
-        return Err(LabeledError {
-            label: "Custom walker only supported without --original/-o flag".into(),
-            msg: "Please remove the custom flag".into(),
-            span: None,
-        });
+        return Err(
+            LabeledError::new("Please remove the custom flag").with_label(
+                "Custom walker only supported without --original/-o flag",
+                Span::unknown(),
+            ),
+        );
     }
 
     let Some(a_val) = param else {
-        return Err(LabeledError {
-            label: "No pattern provided".into(),
-            msg: "Please pass a parameter to walk".into(),
-            span: None,
-        });
+        return Err(LabeledError::new("Please pass a parameter to walk")
+            .with_label("No pattern provided", Span::unknown()));
     };
 
     let parallelism = match threads {
@@ -351,21 +354,17 @@ pub fn jwalk_minimal(
         .parallelism(parallelism)
     {
         let entry_display = match entry.map_err(|err| {
-            return Err(LabeledError {
-                label: "Error found with jwalk entry".into(),
-                msg: err.to_string(),
-                span: Some(a_val.span),
-            });
+            LabeledError::new(err.to_string())
+                .with_label("Error found with jwalk entry", a_val.span)
         }) {
             Ok(e) => e,
-            Err(e) => return e,
+            Err(e) => return Err(e),
         };
         entry_list.push(Value::test_string(
             sys_absolute(&entry_display.path())
-                .map_err(|err| LabeledError {
-                    label: "Error found using sys_absolute".into(),
-                    msg: err.to_string(),
-                    span: Some(a_val.span),
+                .map_err(|err| {
+                    LabeledError::new(err.to_string())
+                        .with_label("Error found using sys_absolute", a_val.span)
                 })?
                 .to_string_lossy()
                 .to_string(),
