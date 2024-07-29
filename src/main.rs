@@ -1,5 +1,6 @@
 use chrono::{DateTime, Local};
 use jwalk::{Parallelism, WalkDir, WalkDirGeneric};
+use nu_path::expand_path_with;
 use nu_plugin::{
     serve_plugin, EngineInterface, EvaluatedCall, MsgPackSerializer, Plugin, PluginCommand,
     SimplePluginCommand,
@@ -96,7 +97,7 @@ impl SimplePluginCommand for Implementation {
     fn run(
         &self,
         _config: &JWalkPlugin,
-        _engine: &EngineInterface,
+        engine: &EngineInterface,
         call: &EvaluatedCall,
         _input: &Value,
     ) -> Result<Value, LabeledError> {
@@ -110,6 +111,7 @@ impl SimplePluginCommand for Implementation {
         let max_depth: Option<i64> = call.get_flag("max-depth")?;
         let threads: Option<i64> = call.get_flag("threads")?;
         let verbose = call.has_flag("verbose")?;
+        let curdir = engine.get_current_dir()?;
 
         if verbose {
             jwalk_verbose(
@@ -122,6 +124,7 @@ impl SimplePluginCommand for Implementation {
                 max_depth,
                 threads,
                 debug,
+                curdir,
             )
         } else {
             jwalk_one_column(
@@ -134,6 +137,7 @@ impl SimplePluginCommand for Implementation {
                 max_depth,
                 threads,
                 debug,
+                curdir,
             )
         }
     }
@@ -154,13 +158,15 @@ pub fn jwalk_verbose(
     max_depth: Option<i64>,
     threads: Option<i64>,
     debug: bool,
+    curdir: String,
 ) -> Result<Value, LabeledError> {
     let Some(a_path) = param else {
         return Err(LabeledError::new("Please pass a path parameter to walk")
             .with_label("No pattern provided", Span::unknown()));
     };
 
-    let pathbuf = sys_absolute(Path::new(&a_path.item)).map_err(|err| {
+    let path_to_walk = expand_path_with(a_path.item, curdir, true);
+    let pathbuf = sys_absolute(Path::new(&path_to_walk)).map_err(|err| {
         LabeledError::new(err.to_string()).with_label("Error found using sys_absolute", a_path.span)
     })?;
 
@@ -230,7 +236,7 @@ pub fn jwalk_verbose(
             .max_depth(maximum_depth)
             .parallelism(parallelism)
     } else {
-        WalkDirGeneric::<(usize, bool)>::new(std::path::Path::new(&a_path.item))
+        WalkDirGeneric::<(usize, bool)>::new(std::path::Path::new(&path_to_walk))
             .sort(sort)
             .skip_hidden(skip_hidden)
             .follow_links(follow_links)
@@ -355,6 +361,7 @@ pub fn jwalk_one_column(
     max_depth: Option<i64>,
     threads: Option<i64>,
     debug: bool,
+    curdir: String,
 ) -> Result<Value, LabeledError> {
     if custom {
         return Err(
@@ -370,7 +377,8 @@ pub fn jwalk_one_column(
             .with_label("No pattern provided", Span::unknown()));
     };
 
-    let pathbuf = sys_absolute(Path::new(&a_path.item)).map_err(|err| {
+    let path_to_walk = expand_path_with(a_path.item, curdir, true);
+    let pathbuf = sys_absolute(Path::new(&path_to_walk)).map_err(|err| {
         LabeledError::new(err.to_string()).with_label("Error found using sys_absolute", a_path.span)
     })?;
 
