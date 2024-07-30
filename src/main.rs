@@ -336,11 +336,13 @@ pub fn jwalk_verbose(
     }
     let elapsed = start_time.elapsed();
     if debug {
+        // for debugging put the perf metrics in the last row
+        // the column names don't match the data, but it's just for debugging anyway
         entry_list.push(Value::test_record(record! {
-            "path" => Value::test_string(format!("sort: {}", sort)),
-            "depth" => Value::test_string(format!("skip_hidden: {}", skip_hidden)),
-            "client_state" => Value::test_string(format!("follow_links: {}", follow_links)),
-            "file_name" => Value::test_string(format!("min_depth: {}", minimum_depth)),
+            "depth" => Value::test_string(format!("sort: {}", sort)),
+            "client_state" => Value::test_string(format!("skip_hidden: {}", skip_hidden)),
+            "file_name" => Value::test_string(format!("follow_links: {}", follow_links)),
+            "full_path" => Value::test_string(format!("min_depth: {}", minimum_depth)),
             "is_dir" => Value::test_string(format!("max_depth: {}", maximum_depth)),
             "is_file" => Value::test_string(format!("threads: {}", threads.unwrap_or(0))),
             "is_symlink" => Value::test_string(format!("time: {:?}", elapsed)),
