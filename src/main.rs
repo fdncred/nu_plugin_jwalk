@@ -3,10 +3,10 @@ use jwalk::{Parallelism, WalkDir, WalkDirGeneric};
 use nu_path::expand_path_with;
 use nu_plugin::{
     serve_plugin, EngineInterface, EvaluatedCall, MsgPackSerializer, Plugin, PluginCommand,
-    SimplePluginCommand,
 };
 use nu_protocol::{
-    record, Category, Example, LabeledError, Signature, Span, Spanned, SyntaxShape, Value,
+    record, Category, Example, IntoPipelineData, LabeledError, ListStream, PipelineData, Signals,
+    Signature, Span, Spanned, SyntaxShape, Value,
 };
 use omnipath::sys_absolute;
 use std::{cmp::Ordering, path::Path};
@@ -25,7 +25,7 @@ impl Plugin for JWalkPlugin {
 
 struct Implementation;
 
-impl SimplePluginCommand for Implementation {
+impl PluginCommand for Implementation {
     type Plugin = JWalkPlugin;
 
     fn name(&self) -> &str {
@@ -96,11 +96,11 @@ impl SimplePluginCommand for Implementation {
 
     fn run(
         &self,
-        _config: &JWalkPlugin,
+        _plugin: &JWalkPlugin,
         engine: &EngineInterface,
         call: &EvaluatedCall,
-        _input: &Value,
-    ) -> Result<Value, LabeledError> {
+        _input: PipelineData,
+    ) -> Result<PipelineData, LabeledError> {
         let pattern: Option<Spanned<String>> = call.opt(0)?;
         let sort = call.has_flag("sort")?;
         let custom = call.has_flag("custom")?;
@@ -112,6 +112,8 @@ impl SimplePluginCommand for Implementation {
         let threads: Option<i64> = call.get_flag("threads")?;
         let verbose = call.has_flag("verbose")?;
         let curdir = engine.get_current_dir()?;
+
+        // eprintln!("interrupt status: {:?}", engine.signals().interrupted());
 
         if verbose {
             jwalk_verbose(
@@ -159,7 +161,7 @@ pub fn jwalk_verbose(
     threads: Option<i64>,
     debug: bool,
     curdir: String,
-) -> Result<Value, LabeledError> {
+) -> Result<PipelineData, LabeledError> {
     let Some(a_path) = param else {
         return Err(LabeledError::new("Please pass a path parameter to walk")
             .with_label("No pattern provided", Span::unknown()));
@@ -349,7 +351,7 @@ pub fn jwalk_verbose(
         }))
     }
 
-    Ok(Value::test_list(entry_list))
+    Ok(Value::test_list(entry_list).into_pipeline_data())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -364,7 +366,7 @@ pub fn jwalk_one_column(
     threads: Option<i64>,
     debug: bool,
     curdir: String,
-) -> Result<Value, LabeledError> {
+) -> Result<PipelineData, LabeledError> {
     if custom {
         return Err(
             LabeledError::new("Please remove the custom flag").with_label(
@@ -399,39 +401,59 @@ pub fn jwalk_one_column(
         None => usize::MAX,
     };
 
-    let mut entry_list = vec![];
-    let start_time = std::time::Instant::now();
+    // let mut entry_list = vec![];
+    // let start_time = std::time::Instant::now();
 
-    for entry in WalkDir::new(pathbuf)
+    let iter = WalkDir::new(pathbuf)
         .sort(sort)
         .skip_hidden(skip_hidden)
         .follow_links(follow_links)
         .min_depth(minimum_depth)
         .max_depth(maximum_depth)
         .parallelism(parallelism)
-    {
-        let entry_display = match entry.map_err(|err| {
-            LabeledError::new(err.to_string())
-                .with_label("Error found with jwalk entry", a_path.span)
-        }) {
-            Ok(e) => e,
-            Err(e) => return Err(e),
-        };
-        entry_list.push(Value::test_string(
-            sys_absolute(&entry_display.path())
-                .map_err(|err| {
-                    LabeledError::new(err.to_string())
-                        .with_label("Error found using sys_absolute", a_path.span)
-                })?
-                .to_string_lossy()
-                .to_string(),
-        ));
-    }
-    let elapsed = start_time.elapsed();
-    if debug {
-        // for debugging put the perf metrics in the last rows
-        entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads, elapsed)));
-    }
+        .into_iter()
+        .map(|entry| {
+            let entry_display = entry.unwrap();
+            Value::test_string(
+                sys_absolute(&entry_display.path())
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string(),
+            )
+        });
 
-    Ok(Value::test_list(entry_list))
+    Ok(ListStream::new(iter, a_path.span, Signals::empty()).into())
+
+    // for entry in WalkDir::new(pathbuf)
+    //     .sort(sort)
+    //     .skip_hidden(skip_hidden)
+    //     .follow_links(follow_links)
+    //     .min_depth(minimum_depth)
+    //     .max_depth(maximum_depth)
+    //     .parallelism(parallelism)
+    // {
+    //     let entry_display = match entry.map_err(|err| {
+    //         LabeledError::new(err.to_string())
+    //             .with_label("Error found with jwalk entry", a_path.span)
+    //     }) {
+    //         Ok(e) => e,
+    //         Err(e) => return Err(e),
+    //     };
+    //     entry_list.push(Value::test_string(
+    //         sys_absolute(&entry_display.path())
+    //             .map_err(|err| {
+    //                 LabeledError::new(err.to_string())
+    //                     .with_label("Error found using sys_absolute", a_path.span)
+    //             })?
+    //             .to_string_lossy()
+    //             .to_string(),
+    //     ));
+    // }
+    // let elapsed = start_time.elapsed();
+    // if debug {
+    //     // for debugging put the perf metrics in the last rows
+    //     entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads, elapsed)));
+    // }
+
+    // Ok(Value::test_list(entry_list).into_pipeline_data())
 }
