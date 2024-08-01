@@ -18,6 +18,5 @@ chrono = "0.4.38"
 omnipath = "0.1.6"
 nuon = { path = "../nushell/crates/nuon", version = "0.96.2" }
 nu-path = { path = "../nushell/crates/nu-path", version = "0.96.2" }
-log = "0.4.22"
 # nu-plugin = "0.80.0"
 # nu-protocol = "0.80.0"

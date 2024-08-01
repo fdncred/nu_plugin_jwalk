@@ -1104,7 +1104,6 @@ version = "0.6.0"
 dependencies = [
  "chrono",
  "jwalk",
- "log",
  "nu-path",
  "nu-plugin",
  "nu-protocol",
