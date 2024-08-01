@@ -5,8 +5,8 @@ use nu_plugin::{
     serve_plugin, EngineInterface, EvaluatedCall, MsgPackSerializer, Plugin, PluginCommand,
 };
 use nu_protocol::{
-    record, Category, Example, IntoPipelineData, LabeledError, ListStream, PipelineData, Signals,
-    Signature, Span, Spanned, SyntaxShape, Value,
+    record, Category, Example, IntoPipelineData, LabeledError, ListStream, PipelineData,
+    ShellError, Signals, Signature, Span, Spanned, SyntaxShape, Value,
 };
 use omnipath::sys_absolute;
 use std::{cmp::Ordering, path::Path};
@@ -138,7 +138,6 @@ impl PluginCommand for Implementation {
                 min_depth,
                 max_depth,
                 threads,
-                debug,
                 curdir,
             )
         }
@@ -364,7 +363,6 @@ pub fn jwalk_one_column(
     min_depth: Option<i64>,
     max_depth: Option<i64>,
     threads: Option<i64>,
-    debug: bool,
     curdir: String,
 ) -> Result<PipelineData, LabeledError> {
     if custom {
@@ -380,6 +378,8 @@ pub fn jwalk_one_column(
         return Err(LabeledError::new("Please pass a path parameter to walk")
             .with_label("No pattern provided", Span::unknown()));
     };
+
+    let span = a_path.span.clone();
 
     let path_to_walk = expand_path_with(a_path.item, curdir, true);
     let pathbuf = sys_absolute(Path::new(&path_to_walk)).map_err(|err| {
@@ -401,9 +401,6 @@ pub fn jwalk_one_column(
         None => usize::MAX,
     };
 
-    // let mut entry_list = vec![];
-    // let start_time = std::time::Instant::now();
-
     let iter = WalkDir::new(pathbuf)
         .sort(sort)
         .skip_hidden(skip_hidden)
@@ -412,48 +409,25 @@ pub fn jwalk_one_column(
         .max_depth(maximum_depth)
         .parallelism(parallelism)
         .into_iter()
-        .map(|entry| {
-            let entry_display = entry.unwrap();
-            Value::test_string(
-                sys_absolute(&entry_display.path())
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string(),
-            )
+        .map(move |entry| match entry {
+            Ok(e) => Value::string(e.path().to_string_lossy().to_string(), span),
+            Err(err) => {
+                let error = ShellError::LabeledError(Box::new(
+                    LabeledError::new(err.to_string())
+                        .with_label("Error found with jwalk entry", span),
+                ));
+
+                Value::error(error, span)
+            }
         });
 
-    Ok(ListStream::new(iter, a_path.span, Signals::empty()).into())
-
-    // for entry in WalkDir::new(pathbuf)
-    //     .sort(sort)
-    //     .skip_hidden(skip_hidden)
-    //     .follow_links(follow_links)
-    //     .min_depth(minimum_depth)
-    //     .max_depth(maximum_depth)
-    //     .parallelism(parallelism)
-    // {
-    //     let entry_display = match entry.map_err(|err| {
-    //         LabeledError::new(err.to_string())
-    //             .with_label("Error found with jwalk entry", a_path.span)
-    //     }) {
-    //         Ok(e) => e,
-    //         Err(e) => return Err(e),
-    //     };
-    //     entry_list.push(Value::test_string(
-    //         sys_absolute(&entry_display.path())
-    //             .map_err(|err| {
-    //                 LabeledError::new(err.to_string())
-    //                     .with_label("Error found using sys_absolute", a_path.span)
-    //             })?
-    //             .to_string_lossy()
-    //             .to_string(),
-    //     ));
-    // }
-    // let elapsed = start_time.elapsed();
+    // no clue how to add performance streaming metrics
+    // let start_time = std::time::Instant::now();
     // if debug {
+    //     let elapsed = start_time.elapsed();
     //     // for debugging put the perf metrics in the last rows
-    //     entry_list.push(Value::test_string(format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads, elapsed)));
+    //     eprintln!("{}", format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads, elapsed));
     // }
 
-    // Ok(Value::test_list(entry_list).into_pipeline_data())
+    Ok(ListStream::new(iter, a_path.span, Signals::empty()).into())
 }
