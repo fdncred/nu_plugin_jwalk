@@ -32,7 +32,7 @@ impl PluginCommand for Implementation {
         "jwalk"
     }
 
-    fn usage(&self) -> &str {
+    fn description(&self) -> &str {
         "View jwalk results of walking the path."
     }
     fn signature(&self) -> Signature {
