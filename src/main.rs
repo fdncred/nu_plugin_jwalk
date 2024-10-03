@@ -69,6 +69,11 @@ impl PluginCommand for Implementation {
                 "number of rayon threads to use",
                 Some('t'),
             )
+            .switch(
+                "debug",
+                "show internal settings and performance metrics",
+                Some('d'),
+            )
             .category(Category::Experimental)
     }
 
@@ -104,6 +109,7 @@ impl PluginCommand for Implementation {
         let max_depth: Option<i64> = call.get_flag("max-depth")?;
         let threads: Option<i64> = call.get_flag("threads")?;
         let verbose = call.has_flag("verbose")?;
+        let debug = call.has_flag("debug")?;
         let curdir = engine.get_current_dir()?;
 
         if verbose {
@@ -116,6 +122,7 @@ impl PluginCommand for Implementation {
                 min_depth,
                 max_depth,
                 threads,
+                debug,
                 curdir,
             )
         } else {
@@ -128,6 +135,7 @@ impl PluginCommand for Implementation {
                 min_depth,
                 max_depth,
                 threads,
+                debug,
                 curdir,
             )
         }
@@ -148,6 +156,7 @@ pub fn jwalk_verbose(
     min_depth: Option<i64>,
     max_depth: Option<i64>,
     threads: Option<i64>,
+    debug: bool,
     curdir: String,
 ) -> Result<PipelineData, LabeledError> {
     let Some(a_path) = param else {
@@ -176,6 +185,8 @@ pub fn jwalk_verbose(
         Some(m) => m as usize,
         None => usize::MAX,
     };
+
+    let start_time = std::time::Instant::now();
 
     let walk_dir = if custom {
         WalkDirGeneric::<(usize, bool)>::new(pathbuf)
@@ -312,23 +323,19 @@ pub fn jwalk_verbose(
         }
     });
 
-    Ok(ListStream::new(iter, span, Signals::empty()).into())
+    // unfortunately, this eprintln prints out first
+    if debug {
+        let additional_iter = std::iter::from_fn(move || {
+            // for debugging put the perf metrics in the last rows
+            eprintln!("{}", format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads, start_time.elapsed()));
+            None
+        });
 
-    // no clue how to add performance metrics when it's streaming
-    // let elapsed = start_time.elapsed();
-    // if debug {
-    //     // for debugging put the perf metrics in the last row
-    //     // the column names don't match the data, but it's just for debugging anyway
-    //     entry_list.push(Value::test_record(record! {
-    //         "depth" => Value::test_string(format!("sort: {}", sort)),
-    //         "client_state" => Value::test_string(format!("skip_hidden: {}", skip_hidden)),
-    //         "file_name" => Value::test_string(format!("follow_links: {}", follow_links)),
-    //         "full_path" => Value::test_string(format!("min_depth: {}", minimum_depth)),
-    //         "is_dir" => Value::test_string(format!("max_depth: {}", maximum_depth)),
-    //         "is_file" => Value::test_string(format!("threads: {}", threads.unwrap_or(0))),
-    //         "is_symlink" => Value::test_string(format!("time: {:?}", elapsed)),
-    //     }))
-    // }
+        let chained_iter = iter.chain(additional_iter);
+        Ok(ListStream::new(chained_iter, span, Signals::empty()).into())
+    } else {
+        Ok(ListStream::new(iter, span, Signals::empty()).into())
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -341,6 +348,7 @@ pub fn jwalk_one_column(
     min_depth: Option<i64>,
     max_depth: Option<i64>,
     threads: Option<i64>,
+    debug: bool,
     curdir: String,
 ) -> Result<PipelineData, LabeledError> {
     if custom {
@@ -379,6 +387,8 @@ pub fn jwalk_one_column(
         None => usize::MAX,
     };
 
+    let start_time = std::time::Instant::now();
+
     let iter = WalkDir::new(pathbuf)
         .sort(sort)
         .skip_hidden(skip_hidden)
@@ -399,13 +409,17 @@ pub fn jwalk_one_column(
             }
         });
 
-    // no clue how to add performance streaming metrics
-    // let start_time = std::time::Instant::now();
-    // if debug {
-    //     let elapsed = start_time.elapsed();
-    //     // for debugging put the perf metrics in the last rows
-    //     eprintln!("{}", format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads, elapsed));
-    // }
+    // unfortunately, this eprintln prints out first
+    if debug {
+        let additional_iter = std::iter::from_fn(move || {
+            // for debugging put the perf metrics in the last rows
+            eprintln!("{}", format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads, start_time.elapsed()));
+            None
+        });
 
-    Ok(ListStream::new(iter, span, Signals::empty()).into())
+        let chained_iter = iter.chain(additional_iter);
+        Ok(ListStream::new(chained_iter, span, Signals::empty()).into())
+    } else {
+        Ok(ListStream::new(iter, span, Signals::empty()).into())
+    }
 }
