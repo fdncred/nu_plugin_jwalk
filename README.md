@@ -36,7 +36,7 @@ Examples:
 ## Examples
 ### Example 1
 jwalk with one column output, with debug info using 4 threads and a max depth of 1
-```
+```nushell
 ❯ jwalk c:\Users\username\source\repos\forks\nushell --debug --threads 4 --max-depth 1
 ╭────┬──────────────────────────────────────────────────────────────────╮
 │  0 │ c:\Users\username\source\repos\forks\nushell                     │
