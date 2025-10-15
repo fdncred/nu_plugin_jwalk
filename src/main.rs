@@ -2,11 +2,11 @@ use chrono::{DateTime, Local};
 use jwalk::{Parallelism, WalkDir, WalkDirGeneric};
 use nu_path::expand_path_with;
 use nu_plugin::{
-    serve_plugin, EngineInterface, EvaluatedCall, MsgPackSerializer, Plugin, PluginCommand,
+    EngineInterface, EvaluatedCall, MsgPackSerializer, Plugin, PluginCommand, serve_plugin,
 };
 use nu_protocol::{
-    record, Category, Example, LabeledError, ListStream, PipelineData, ShellError, Signals,
-    Signature, Span, Spanned, SyntaxShape, Value,
+    Category, Example, LabeledError, ListStream, PipelineData, ShellError, Signals, Signature,
+    Span, Spanned, SyntaxShape, Value, record,
 };
 use omnipath::sys_absolute;
 use std::{cmp::Ordering, path::Path};
@@ -77,19 +77,18 @@ impl PluginCommand for Implementation {
             .category(Category::Experimental)
     }
 
-    fn examples(&self) -> Vec<Example> {
+    fn examples(&self) -> Vec<Example<'_>> {
         vec![
             Example {
-            description: "Walk the process working directory with 2 threads and max depth of 1",
-            example: "jwalk --max-depth 1 --threads 2 (pwd)",
-            result: None,
-        },
+                description: "Walk the process working directory with 2 threads and max depth of 1",
+                example: "jwalk --max-depth 1 --threads 2 (pwd)",
+                result: None,
+            },
             Example {
-            description: "Walk the process working directory with 2 threads and max depth of 1 using verbose",
-            example: "jwalk --verbose --max-depth 1 --threads 2 (pwd)",
-            result: None,
-        },
-
+                description: "Walk the process working directory with 2 threads and max depth of 1 using verbose",
+                example: "jwalk --verbose --max-depth 1 --threads 2 (pwd)",
+                result: None,
+            },
         ]
     }
 
@@ -327,7 +326,19 @@ pub fn jwalk_verbose(
     if debug {
         let additional_iter = std::iter::from_fn(move || {
             // for debugging put the perf metrics in the last rows
-            eprintln!("{}", format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads, start_time.elapsed()));
+            eprintln!(
+                "{}",
+                format!(
+                    "Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}",
+                    sort,
+                    skip_hidden,
+                    follow_links,
+                    minimum_depth,
+                    maximum_depth,
+                    threads,
+                    start_time.elapsed()
+                )
+            );
             None
         });
 
@@ -413,7 +424,19 @@ pub fn jwalk_one_column(
     if debug {
         let additional_iter = std::iter::from_fn(move || {
             // for debugging put the perf metrics in the last rows
-            eprintln!("{}", format!("Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}", sort, skip_hidden, follow_links, minimum_depth, maximum_depth, threads, start_time.elapsed()));
+            eprintln!(
+                "{}",
+                format!(
+                    "Running with these options:\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\nTime: {:?}",
+                    sort,
+                    skip_hidden,
+                    follow_links,
+                    minimum_depth,
+                    maximum_depth,
+                    threads,
+                    start_time.elapsed()
+                )
+            );
             None
         });
 
