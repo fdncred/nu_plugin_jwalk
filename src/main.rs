@@ -304,7 +304,7 @@ pub fn jwalk_verbose(
                     _ => Value::test_string("".to_string()),
                 },
                 "size" => match m {
-                    Some((_, _, _, l, _)) => Value::test_int(l as i64),
+                    Some((_, _, _, l, _)) => Value::test_filesize(l as i64),
                     _ => Value::test_int(0),
                 },
                 "readonly" => match m {
