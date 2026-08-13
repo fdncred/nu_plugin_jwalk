@@ -16,8 +16,8 @@ pub enum Engine {
 impl Engine {
     pub fn parse(value: Option<&str>, span: Span) -> Result<Self, LabeledError> {
         match value {
-            None | Some("dua") => Ok(Self::Dua),
-            Some("jwalk") => Ok(Self::Jwalk),
+            None | Some("jwalk") => Ok(Self::Jwalk),
+            Some("dua") => Ok(Self::Dua),
             Some("zlob") => Ok(Self::Zlob),
             Some(other) => Err(LabeledError::new("invalid engine").with_label(
                 format!("expected 'dua', 'jwalk', or 'zlob', got '{other}'"),

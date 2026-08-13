@@ -1,6 +1,6 @@
 # nu_plugin_jwalk
 
-Nushell plugin that walks a directory tree. The default engine is [`dua-core`](https://crates.io/crates/dua-core). [`jwalk`](https://crates.io/crates/jwalk) and [`zlob`](https://crates.io/crates/zlob) are available for comparison via `--engine`.
+Nushell plugin that walks a directory tree. The default engine is [`jwalk`](https://crates.io/crates/jwalk). [`dua-core`](https://crates.io/crates/dua-core) and [`zlob`](https://crates.io/crates/zlob) are available for comparison via `--engine`.
 
 ## Install
 
@@ -13,14 +13,14 @@ plugin use jwalk
 ## Fastest walk
 
 ```nushell
-# zlob can list paths without an extra stat; skip hidden names and heavy dirs
-jwalk --engine zlob --skip-hidden --skip-dir [target node_modules .git] ~/src
-
-# Default engine is dua (always stats)
+# Default engine is jwalk; skip hidden names and heavy dirs
 jwalk --skip-hidden --skip-dir [target node_modules .git] ~/src
 
-# Same walk on jwalk
-jwalk --engine jwalk --skip-hidden --skip-dir [target node_modules .git] ~/src
+# Same walk on zlob
+jwalk --engine zlob --skip-hidden --skip-dir [target node_modules .git] ~/src
+
+# Same walk on dua (always stats)
+jwalk --engine dua --skip-hidden --skip-dir [target node_modules .git] ~/src
 
 # Fastest comparable number (no per-path plugin messages)
 jwalk --engine zlob --count --skip-hidden --skip-dir [target node_modules .git] ~/src
@@ -39,15 +39,15 @@ Avoid `--sort`, `--follow-links`, `--custom`, and `--verbose --metadata` when yo
 
 ## Engines
 
-| | `dua` (default) | `jwalk` | `zlob` |
+| | `jwalk` (default) | `dua` | `zlob` |
 |---|---|---|---|
-| Parallelism | work-stealing pool (`crossbeam`) | Rayon | zlob worker pool |
-| Path listing | always `stat`s | no extra `stat` | no extra `stat` unless `--metadata` |
-| `--metadata` | already collected during the walk | extra syscall per entry | optional, fetched during the walk |
-| `--sort` | collect, then sort by file name | per-directory sort while streaming | sort collected results by path |
-| `--follow-links` | not supported | supported | supported |
-| `--custom` | not supported | `process_read_dir` demo | not supported |
-| `--order` | `completion` (default) or `parent-first` | ignored | ignored |
+| Parallelism | Rayon | work-stealing pool (`crossbeam`) | zlob worker pool |
+| Path listing | no extra `stat` | always `stat`s | no extra `stat` unless `--metadata` |
+| `--metadata` | extra syscall per entry | already collected during the walk | optional, fetched during the walk |
+| `--sort` | per-directory sort while streaming | collect, then sort by file name | sort collected results by path |
+| `--follow-links` | supported | not supported | supported |
+| `--custom` | `process_read_dir` demo | not supported | not supported |
+| `--order` | ignored | `completion` (default) or `parent-first` | ignored |
 
 `dua` can look slower on path-only / `--count` walks because it always reads metadata. `zlob` and `jwalk` skip that syscall unless you pass `--metadata`.
 
@@ -55,10 +55,10 @@ Avoid `--sort`, `--follow-links`, `--custom`, and `--verbose --metadata` when yo
 
 ## Flags
 
-```
+```nushell
 jwalk {flags} <path>
 
-  --engine <dua|jwalk|zlob>   walk engine (default dua)
+  --engine <jwalk|dua|zlob>   walk engine (default jwalk)
   --verbose                   multi-column output without extra metadata syscalls
   --metadata                  include size, times, readonly (implies record output)
   --sort                      sort by file name

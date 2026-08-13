@@ -35,11 +35,11 @@ impl PluginCommand for Implementation {
     }
 
     fn description(&self) -> &str {
-        "Walk a path with dua-core (default), jwalk, or zlob."
+        "Walk a path with jwalk (default), dua-core, or zlob."
     }
 
     fn extra_description(&self) -> &str {
-        "dua is the default engine and always reads metadata while walking. jwalk and zlob can list paths without an extra stat. --custom requires --engine jwalk. --follow-links works with jwalk and zlob."
+        "jwalk is the default engine and can list paths without an extra stat. zlob can also skip that stat unless --metadata is set. dua always reads metadata while walking. --custom requires --engine jwalk. --follow-links works with jwalk and zlob."
     }
 
     fn signature(&self) -> Signature {
@@ -48,7 +48,7 @@ impl PluginCommand for Implementation {
             .named(
                 "engine",
                 SyntaxShape::String,
-                "walk engine: dua (default), jwalk, or zlob",
+                "walk engine: jwalk (default), dua, or zlob",
                 Some('e'),
             )
             .switch(
@@ -129,8 +129,8 @@ impl PluginCommand for Implementation {
                 result: None,
             },
             Example {
-                description: "Same walk using the jwalk engine for comparison",
-                example: "jwalk --engine jwalk --skip-hidden --skip-dir [target node_modules .git] ~",
+                description: "Same walk using the dua engine for comparison",
+                example: "jwalk --engine dua --skip-hidden --skip-dir [target node_modules .git] ~",
                 result: None,
             },
             Example {
