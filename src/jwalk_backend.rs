@@ -1,9 +1,3 @@
-use std::{cmp::Ordering, fs::Metadata, sync::Arc};
-
-use jwalk::{DirEntry, Parallelism, WalkDir, WalkDirGeneric};
-use nu_plugin::EngineInterface;
-use nu_protocol::PipelineData;
-
 use crate::{
     emit::{
         WalkItem, WalkedEntry, WalkedMeta, count_pipeline, is_root_item, send_walk_iter,
@@ -11,6 +5,10 @@ use crate::{
     },
     options::WalkOptions,
 };
+use jwalk::{DirEntry, Parallelism, WalkDir, WalkDirGeneric};
+use nu_plugin::EngineInterface;
+use nu_protocol::PipelineData;
+use std::{cmp::Ordering, fs::Metadata, sync::Arc};
 
 pub fn run(
     options: WalkOptions,

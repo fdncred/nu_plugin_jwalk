@@ -1,7 +1,3 @@
-use dua_core::{Order, walk};
-use nu_plugin::EngineInterface;
-use nu_protocol::{PipelineData, Signals};
-
 use crate::{
     emit::{
         WalkItem, WalkedEntry, WalkedMeta, count_pipeline, is_root_item, maybe_sort_items,
@@ -9,6 +5,9 @@ use crate::{
     },
     options::{WalkOptions, WalkOrder, is_hidden_name},
 };
+use dua_core::{Order, walk};
+use nu_plugin::EngineInterface;
+use nu_protocol::{PipelineData, Signals};
 
 pub fn run(
     options: WalkOptions,

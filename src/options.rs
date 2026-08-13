@@ -1,10 +1,9 @@
+use nu_protocol::{LabeledError, Span};
 use std::{
     ffi::{OsStr, OsString},
     path::PathBuf,
     sync::Arc,
 };
-
-use nu_protocol::{LabeledError, Span};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Engine {

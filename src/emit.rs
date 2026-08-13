@@ -1,3 +1,6 @@
+use crate::options::WalkOptions;
+use chrono::{DateTime, Local};
+use nu_protocol::{ListStream, PipelineData, ShellError, Signals, Span, Value, record};
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},
@@ -5,11 +8,6 @@ use std::{
     thread,
     time::{Duration, Instant, SystemTime},
 };
-
-use chrono::{DateTime, Local};
-use nu_protocol::{ListStream, PipelineData, ShellError, Signals, Span, Value, record};
-
-use crate::options::WalkOptions;
 
 #[derive(Debug)]
 pub struct WalkedMeta {

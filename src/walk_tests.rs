@@ -1,18 +1,16 @@
-use std::{
-    collections::BTreeSet,
-    fs,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-
-use nu_protocol::Span;
-
 use crate::{
     dua_backend,
     emit::WalkItem,
     jwalk_backend,
     options::{Engine, WalkOptions, WalkOrder},
     zlob_backend,
+};
+use nu_protocol::Span;
+use std::{
+    collections::BTreeSet,
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
 
 const ENGINES: [Engine; 3] = [Engine::Dua, Engine::Jwalk, Engine::Zlob];

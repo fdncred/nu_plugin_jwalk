@@ -1,13 +1,3 @@
-use std::{
-    path::Path,
-    sync::mpsc::SyncSender,
-    time::{Duration, SystemTime},
-};
-
-use nu_plugin::EngineInterface;
-use nu_protocol::{LabeledError, PipelineData, Signals};
-use zlob::walk::{WalkBuilder, WalkEntry, WalkFlags, WalkMetadata, WalkState};
-
 use crate::{
     emit::{
         WalkItem, WalkedEntry, WalkedMeta, count_pipeline, maybe_sort_items, spawn_item_stream,
@@ -15,6 +5,14 @@ use crate::{
     },
     options::WalkOptions,
 };
+use nu_plugin::EngineInterface;
+use nu_protocol::{LabeledError, PipelineData, Signals};
+use std::{
+    path::Path,
+    sync::mpsc::SyncSender,
+    time::{Duration, SystemTime},
+};
+use zlob::walk::{WalkBuilder, WalkEntry, WalkFlags, WalkMetadata, WalkState};
 
 pub fn run(options: WalkOptions, engine: &EngineInterface) -> Result<PipelineData, LabeledError> {
     let start = std::time::Instant::now();

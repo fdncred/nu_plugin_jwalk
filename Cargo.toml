@@ -30,7 +30,7 @@ omnipath = "0.1.6"
 tempfile = "3"
 
 [profile.release]
-opt-level = 3     # Optimize for size
+opt-level = 3     # Optimize for speed
 strip = "debuginfo"
 lto = "thin"
 

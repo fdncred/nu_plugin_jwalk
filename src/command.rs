@@ -1,17 +1,15 @@
-use std::{ffi::OsString, path::Path, sync::Arc};
-
+use crate::{
+    dua_backend, jwalk_backend,
+    options::{Engine, WalkOptions, WalkOrder},
+    zlob_backend,
+};
 use nu_path::expand_path_with;
 use nu_plugin::{EngineInterface, EvaluatedCall, Plugin, PluginCommand};
 use nu_protocol::{
     Category, Example, LabeledError, PipelineData, Signature, Span, Spanned, SyntaxShape,
 };
 use omnipath::sys_absolute;
-
-use crate::{
-    dua_backend, jwalk_backend,
-    options::{Engine, WalkOptions, WalkOrder},
-    zlob_backend,
-};
+use std::{ffi::OsString, path::Path, sync::Arc};
 
 pub struct JWalkPlugin;
 
