@@ -21,10 +21,17 @@ nu-path = "0.114.1"
 # nu-path = { path = "../nushell/crates/nu-path", version = "0.98.0" }
 
 jwalk = "0.9.0"
-dua-core = "2.41.1"
-zlob = "1.6.2"
+dua-core = "3.0.0"
+ignore = "0.4"
+walkdir = "2"
+zlob = { version = "1.6.2", optional = true }
 chrono = "0.4.45"
 omnipath = "0.1.6"
+
+[features]
+default = []
+# zlob links a Zig walk implementation; the Zig toolchain must be on PATH.
+zlob = ["dep:zlob"]
 
 [dev-dependencies]
 tempfile = "3"

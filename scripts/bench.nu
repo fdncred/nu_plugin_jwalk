@@ -1,13 +1,15 @@
 #!/usr/bin/env nu
 
-# Compare dua, jwalk, and zlob walk times on the same tree.
+# Compare dua, ignore, jwalk, walkdir, and zlob walk times on the same tree.
 #
 # Usage:
 #   nu scripts/bench.nu ~/src/nushell --threads 8 --runs 5
 #
-# Fairness: dua-core always stats entries while walking. jwalk and zlob
-# --count / path listing do not, so they can look faster. verbose+metadata is
-# the closer apples-to-apples comparison.
+# Fairness: dua-core always stats entries while walking. jwalk, ignore,
+# walkdir, and zlob --count / path listing do not, so they can look faster.
+# verbose+metadata is the closer apples-to-apples comparison.
+#
+# zlob is included only when this plugin was built with --features zlob.
 #
 # Optional: purge OS caches yourself before a run. On macOS that is `purge`
 # (requires privileges) and is not done here.
@@ -22,8 +24,16 @@ def main [
         error make { msg: $"path does not exist: ($root)" }
     }
 
+    mut engines = [dua ignore jwalk walkdir]
+    try {
+        jwalk --engine zlob --count --max-depth 0 $root | ignore
+        $engines = ($engines | append zlob)
+    } catch {
+        print --stderr "skipping zlob (rebuild with --features zlob)"
+    }
+
     mut rows = []
-    for engine in [dua jwalk zlob] {
+    for engine in $engines {
         $rows = ($rows | append (bench-case $root $engine $threads $runs "count" {||
             jwalk --engine $engine --count --threads $threads $root
         }))
@@ -73,14 +83,14 @@ def bench-case [
     {
         engine: $engine
         case: $name
-        entries: $entries
+        entries: ($entries | into filesize)
         min_ms: (($min_ns / 1_000_000) | math round --precision 2)
         median_ms: (($median_ns / 1_000_000) | math round --precision 2)
         entries_per_sec: (
             if $median_ns == 0 {
                 0
             } else {
-                ($entries / ($median_ns / 1_000_000_000)) | math round
+                (($entries / ($median_ns / 1_000_000_000)) | math round | into filesize)
             }
         )
     }

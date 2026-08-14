@@ -1,15 +1,15 @@
 use crate::{
     emit::{
-        WalkItem, WalkedEntry, WalkedMeta, count_pipeline, maybe_sort_items, spawn_item_stream,
-        stream_items, walk_root_entry,
+        WalkItem, WalkedEntry, WalkedMeta, finish_walk, maybe_sort_items, send_walk_iter,
+        spawn_item_stream, walk_root_entry,
     },
     options::WalkOptions,
 };
 use nu_plugin::EngineInterface;
-use nu_protocol::{LabeledError, PipelineData, Signals};
+use nu_protocol::{LabeledError, PipelineData};
 use std::{
     path::Path,
-    sync::mpsc::SyncSender,
+    sync::{Mutex, mpsc::SyncSender},
     time::{Duration, SystemTime},
 };
 use zlob::walk::{WalkBuilder, WalkEntry, WalkFlags, WalkMetadata, WalkState};
@@ -17,8 +17,7 @@ use zlob::walk::{WalkBuilder, WalkEntry, WalkFlags, WalkMetadata, WalkState};
 pub fn run(options: WalkOptions, engine: &EngineInterface) -> Result<PipelineData, LabeledError> {
     let start = std::time::Instant::now();
     let signals = engine.signals().clone();
-    let iter = walk_items(&options);
-    finish(iter, options, start, signals)
+    finish_walk(walk_items(&options), options, start, signals)
 }
 
 pub(crate) fn walk_items(options: &WalkOptions) -> impl Iterator<Item = WalkItem> + Send + 'static {
@@ -29,30 +28,6 @@ pub(crate) fn walk_items(options: &WalkOptions) -> impl Iterator<Item = WalkItem
             let _ = tx.send(WalkItem::Error(err));
         }
     })
-}
-
-fn finish<I>(
-    iter: I,
-    options: WalkOptions,
-    start: std::time::Instant,
-    signals: Signals,
-) -> Result<PipelineData, LabeledError>
-where
-    I: Iterator<Item = WalkItem> + Send + 'static,
-{
-    if options.count {
-        let count = iter
-            .filter(|item| matches!(item, WalkItem::Entry(_)))
-            .count() as u64;
-        return Ok(count_pipeline(count, &options, start.elapsed()));
-    }
-
-    if options.sort {
-        let items = maybe_sort_items(iter.collect(), true);
-        return Ok(stream_items(items.into_iter(), options, start, signals));
-    }
-
-    Ok(stream_items(iter, options, start, signals))
 }
 
 fn stream_walk(tx: &SyncSender<WalkItem>, options: &WalkOptions) -> Result<(), String> {
@@ -70,23 +45,51 @@ fn stream_walk(tx: &SyncSender<WalkItem>, options: &WalkOptions) -> Result<(), S
         );
     }
 
+    if options.sort {
+        let items = Mutex::new(Vec::new());
+        builder
+            .run(|entry| {
+                if let Some((item, skip)) = zlob_item(entry, options) {
+                    if let Ok(mut items) = items.lock() {
+                        items.push(item);
+                    }
+                    if skip {
+                        WalkState::SkipDir
+                    } else {
+                        WalkState::Continue
+                    }
+                } else {
+                    WalkState::Continue
+                }
+            })
+            .map_err(|err| err.to_string())?;
+        let items = items.into_inner().unwrap_or_else(|err| err.into_inner());
+        send_walk_iter(tx, maybe_sort_items(items, true));
+        return Ok(());
+    }
+
     builder
         .run(|entry| {
-            if entry.path() == options.path {
-                return WalkState::Continue;
-            }
-            if !should_yield(&entry, options) {
-                return WalkState::Continue;
-            }
-            let skip = entry.is_dir() && is_skip_dir(&entry, options);
-            match tx.send(WalkItem::Entry(to_walked(entry, options))) {
-                Err(_) => WalkState::Quit,
-                Ok(()) if skip => WalkState::SkipDir,
-                Ok(()) => WalkState::Continue,
+            if let Some((item, skip)) = zlob_item(entry, options) {
+                match tx.send(item) {
+                    Err(_) => WalkState::Quit,
+                    Ok(()) if skip => WalkState::SkipDir,
+                    Ok(()) => WalkState::Continue,
+                }
+            } else {
+                WalkState::Continue
             }
         })
         .map_err(|err| err.to_string())?;
     Ok(())
+}
+
+fn zlob_item(entry: WalkEntry<'_>, options: &WalkOptions) -> Option<(WalkItem, bool)> {
+    if entry.path() == options.path || !should_yield(&entry, options) {
+        return None;
+    }
+    let skip = entry.is_dir() && is_skip_dir(&entry, options);
+    Some((WalkItem::Entry(to_walked(entry, options)), skip))
 }
 
 fn walk_flags(options: &WalkOptions) -> WalkFlags {

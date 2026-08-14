@@ -1,14 +1,14 @@
 use crate::{
     emit::{
-        WalkItem, WalkedEntry, WalkedMeta, count_pipeline, is_root_item, send_walk_iter,
-        spawn_item_stream, stream_items, walk_root_entry,
+        WalkItem, WalkedEntry, finish_walk, is_root_item, send_walk_iter, spawn_item_stream,
+        walk_root_entry, walked_meta_from_std,
     },
     options::WalkOptions,
 };
 use jwalk::{DirEntry, Parallelism, WalkDir, WalkDirGeneric};
 use nu_plugin::EngineInterface;
 use nu_protocol::PipelineData;
-use std::{cmp::Ordering, fs::Metadata, sync::Arc};
+use std::{cmp::Ordering, sync::Arc};
 
 pub fn run(
     options: WalkOptions,
@@ -17,9 +17,9 @@ pub fn run(
     let start = std::time::Instant::now();
     let signals = engine.signals().clone();
     if options.custom {
-        return finish(walk_custom(&options), options, start, signals);
+        return finish_walk(walk_custom(&options), options, start, signals);
     }
-    finish(walk_items(&options), options, start, signals)
+    finish_walk(walk_items(&options), options, start, signals)
 }
 
 pub(crate) fn walk_items(options: &WalkOptions) -> impl Iterator<Item = WalkItem> + Send + 'static {
@@ -113,25 +113,6 @@ fn custom_iter(options: &WalkOptions) -> impl Iterator<Item = WalkItem> + Send +
         })
 }
 
-fn finish<I>(
-    iter: I,
-    options: WalkOptions,
-    start: std::time::Instant,
-    signals: nu_protocol::Signals,
-) -> Result<PipelineData, nu_protocol::LabeledError>
-where
-    I: Iterator<Item = WalkItem> + Send + 'static,
-{
-    if options.count {
-        let count = iter
-            .filter(|item| matches!(item, WalkItem::Entry(_)))
-            .count() as u64;
-        return Ok(count_pipeline(count, &options, start.elapsed()));
-    }
-
-    Ok(stream_items(iter, options, start, signals))
-}
-
 fn jwalk_parallelism(options: &WalkOptions) -> Parallelism {
     match options.threads {
         Some(0) => Parallelism::Serial,
@@ -173,7 +154,7 @@ fn from_jwalk_with_state<C: jwalk::ClientState>(
     client_state: bool,
 ) -> WalkedEntry {
     let metadata = if want_metadata {
-        entry.metadata().ok().map(meta_from_std)
+        entry.metadata().ok().map(walked_meta_from_std)
     } else {
         None
     };
@@ -189,15 +170,5 @@ fn from_jwalk_with_state<C: jwalk::ClientState>(
         path_is_symlink: entry.path_is_symlink(),
         client_state,
         metadata,
-    }
-}
-
-fn meta_from_std(meta: Metadata) -> WalkedMeta {
-    WalkedMeta {
-        accessed: meta.accessed().ok(),
-        created: meta.created().ok(),
-        modified: meta.modified().ok(),
-        size: meta.len(),
-        readonly: meta.permissions().readonly(),
     }
 }

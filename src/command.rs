@@ -1,7 +1,9 @@
+#[cfg(feature = "zlob")]
+use crate::zlob_backend;
 use crate::{
-    dua_backend, jwalk_backend,
+    dua_backend, ignore_backend, jwalk_backend,
     options::{Engine, WalkOptions, WalkOrder},
-    zlob_backend,
+    walkdir_backend,
 };
 use nu_path::expand_path_with;
 use nu_plugin::{EngineInterface, EvaluatedCall, Plugin, PluginCommand};
@@ -33,11 +35,11 @@ impl PluginCommand for Implementation {
     }
 
     fn description(&self) -> &str {
-        "Walk a path with jwalk (default), dua-core, or zlob."
+        "Walk a path with jwalk (default), dua-core, ignore, walkdir, or zlob."
     }
 
     fn extra_description(&self) -> &str {
-        "jwalk is the default engine and can list paths without an extra stat. zlob can also skip that stat unless --metadata is set. dua always reads metadata while walking. --custom requires --engine jwalk. --follow-links works with jwalk and zlob."
+        "jwalk is the default engine and can list paths without an extra stat. ignore and walkdir also skip that stat unless --metadata is set. dua always reads metadata while walking. zlob is available only when this plugin is built with --features zlob (requires zig). --custom requires --engine jwalk. --follow-links works with every engine except dua. Every engine streams results; --sort never blocks returning the stream."
     }
 
     fn signature(&self) -> Signature {
@@ -46,7 +48,7 @@ impl PluginCommand for Implementation {
             .named(
                 "engine",
                 SyntaxShape::String,
-                "walk engine: jwalk (default), dua, or zlob",
+                "walk engine: jwalk (default), dua, ignore, walkdir, or zlob (zlob needs --features zlob)",
                 Some('e'),
             )
             .switch(
@@ -68,7 +70,7 @@ impl PluginCommand for Implementation {
             .switch("skip-hidden", "skip hidden files", Some('k'))
             .switch(
                 "follow-links",
-                "follow symbolic links (jwalk and zlob)",
+                "follow symbolic links (all engines except dua)",
                 Some('f'),
             )
             .named(
@@ -122,7 +124,17 @@ impl PluginCommand for Implementation {
                 result: None,
             },
             Example {
-                description: "Same walk using the zlob engine",
+                description: "Same walk using the ignore crate (no gitignore filters)",
+                example: "jwalk --engine ignore --skip-hidden --skip-dir [target node_modules .git] ~",
+                result: None,
+            },
+            Example {
+                description: "Same walk using walkdir (always serial)",
+                example: "jwalk --engine walkdir --skip-hidden --skip-dir [target node_modules .git] ~",
+                result: None,
+            },
+            Example {
+                description: "Same walk using the zlob engine (requires a zlob-enabled build)",
                 example: "jwalk --engine zlob --skip-hidden --skip-dir [target node_modules .git] ~",
                 result: None,
             },
@@ -165,7 +177,10 @@ impl PluginCommand for Implementation {
         options.validate()?;
         match options.engine {
             Engine::Dua => dua_backend::run(options, engine),
+            Engine::Ignore => ignore_backend::run(options, engine),
             Engine::Jwalk => jwalk_backend::run(options, engine),
+            Engine::Walkdir => walkdir_backend::run(options, engine),
+            #[cfg(feature = "zlob")]
             Engine::Zlob => zlob_backend::run(options, engine),
         }
     }

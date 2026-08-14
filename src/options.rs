@@ -8,7 +8,10 @@ use std::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Engine {
     Dua,
+    Ignore,
     Jwalk,
+    Walkdir,
+    #[cfg(feature = "zlob")]
     Zlob,
 }
 
@@ -17,9 +20,11 @@ impl Engine {
         match value {
             None | Some("jwalk") => Ok(Self::Jwalk),
             Some("dua") => Ok(Self::Dua),
-            Some("zlob") => Ok(Self::Zlob),
+            Some("ignore") => Ok(Self::Ignore),
+            Some("walkdir") => Ok(Self::Walkdir),
+            Some("zlob") => parse_zlob(span),
             Some(other) => Err(LabeledError::new("invalid engine").with_label(
-                format!("expected 'dua', 'jwalk', or 'zlob', got '{other}'"),
+                format!("expected {}, got '{other}'", expected_engines()),
                 span,
             )),
         }
@@ -28,9 +33,44 @@ impl Engine {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Dua => "dua",
+            Self::Ignore => "ignore",
             Self::Jwalk => "jwalk",
+            Self::Walkdir => "walkdir",
+            #[cfg(feature = "zlob")]
             Self::Zlob => "zlob",
         }
+    }
+
+    pub fn supports_follow_links(self) -> bool {
+        self != Self::Dua
+    }
+}
+
+fn expected_engines() -> &'static str {
+    #[cfg(feature = "zlob")]
+    {
+        "'dua', 'ignore', 'jwalk', 'walkdir', or 'zlob'"
+    }
+    #[cfg(not(feature = "zlob"))]
+    {
+        "'dua', 'ignore', 'jwalk', or 'walkdir'"
+    }
+}
+
+fn parse_zlob(span: Span) -> Result<Engine, LabeledError> {
+    #[cfg(feature = "zlob")]
+    {
+        let _ = span;
+        Ok(Engine::Zlob)
+    }
+    #[cfg(not(feature = "zlob"))]
+    {
+        Err(
+            LabeledError::new("zlob engine requires the zlob feature").with_label(
+                "rebuild with `cargo install --path . --features zlob` (requires zig on PATH)",
+                span,
+            ),
+        )
     }
 }
 
@@ -86,10 +126,10 @@ impl WalkOptions {
     }
 
     pub fn validate(&self) -> Result<(), LabeledError> {
-        if self.engine == Engine::Dua && self.follow_links {
+        if self.follow_links && !self.engine.supports_follow_links() {
             return Err(
-                LabeledError::new("follow-links requires the jwalk engine").with_label(
-                    "dua never follows symbolic links; pass --engine jwalk",
+                LabeledError::new("follow-links is not supported by the dua engine").with_label(
+                    "dua never follows symbolic links; use jwalk, ignore, walkdir, or zlob",
                     self.span,
                 ),
             );

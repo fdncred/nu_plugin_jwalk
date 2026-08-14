@@ -1,13 +1,14 @@
 use crate::{
     emit::{
-        WalkItem, WalkedEntry, WalkedMeta, count_pipeline, is_root_item, maybe_sort_items,
-        send_walk_iter, spawn_item_stream, stream_items, walk_root_entry,
+        WalkItem, WalkedEntry, WalkedMeta, finish_walk, is_root_item, send_maybe_sorted,
+        spawn_item_stream, walk_root_entry,
     },
     options::{WalkOptions, WalkOrder, is_hidden_name},
 };
 use dua_core::{Order, walk};
 use nu_plugin::EngineInterface;
-use nu_protocol::{PipelineData, Signals};
+use nu_protocol::PipelineData;
+use std::time::SystemTime;
 
 pub fn run(
     options: WalkOptions,
@@ -15,17 +16,17 @@ pub fn run(
 ) -> Result<PipelineData, nu_protocol::LabeledError> {
     let start = std::time::Instant::now();
     let signals = engine.signals().clone();
-    let iter = walk_items(&options);
-    finish(iter, options, start, signals)
+    finish_walk(walk_items(&options), options, start, signals)
 }
 
 pub(crate) fn walk_items(options: &WalkOptions) -> impl Iterator<Item = WalkItem> + Send + 'static {
     let options = options.clone();
     let first = (options.min_depth == 0).then(|| WalkItem::Entry(walk_root_entry(&options)));
     spawn_item_stream(first, move |tx| {
-        send_walk_iter(
+        send_maybe_sorted(
             tx,
             dua_iter(&options).filter(|item| !is_root_item(item, &options.path)),
+            options.sort,
         );
     })
 }
@@ -51,30 +52,6 @@ fn dua_iter(options: &WalkOptions) -> impl Iterator<Item = WalkItem> + Send + 's
         }
         Err(err) => Some(WalkItem::Error(err.to_string())),
     })
-}
-
-fn finish<I>(
-    iter: I,
-    options: WalkOptions,
-    start: std::time::Instant,
-    signals: Signals,
-) -> Result<PipelineData, nu_protocol::LabeledError>
-where
-    I: Iterator<Item = WalkItem> + Send + 'static,
-{
-    if options.count {
-        let count = iter
-            .filter(|item| matches!(item, WalkItem::Entry(_)))
-            .count() as u64;
-        return Ok(count_pipeline(count, &options, start.elapsed()));
-    }
-
-    if options.sort {
-        let items = maybe_sort_items(iter.collect(), true);
-        return Ok(stream_items(items.into_iter(), options, start, signals));
-    }
-
-    Ok(stream_items(iter, options, start, signals))
 }
 
 fn dua_threads(options: &WalkOptions) -> usize {
@@ -113,13 +90,7 @@ fn should_yield(entry: &dua_core::Entry, options: &WalkOptions) -> bool {
 
 fn to_walked(entry: dua_core::Entry, want_metadata: bool) -> WalkedEntry {
     let metadata = if want_metadata {
-        entry.metadata.as_ref().ok().map(|meta| WalkedMeta {
-            accessed: meta.accessed().ok(),
-            created: meta.created().ok(),
-            modified: meta.modified().ok(),
-            size: meta.len(),
-            readonly: meta.permissions().readonly(),
-        })
+        entry.metadata.as_ref().ok().map(walked_meta_from_dua)
     } else {
         None
     };
@@ -136,4 +107,47 @@ fn to_walked(entry: dua_core::Entry, want_metadata: bool) -> WalkedEntry {
         client_state: false,
         metadata,
     }
+}
+
+/// dua-core 3.0 exposes `std::fs::Metadata` on Linux and a native type on macOS/Windows.
+/// Those native types always have `len` and `modified`; access/create/readonly exist only
+/// on the std implementation.
+fn walked_meta_from_dua(meta: &dua_core::Metadata) -> WalkedMeta {
+    WalkedMeta {
+        accessed: dua_accessed(meta),
+        created: dua_created(meta),
+        modified: meta.modified().ok(),
+        size: meta.len(),
+        readonly: dua_readonly(meta),
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn dua_accessed(meta: &dua_core::Metadata) -> Option<SystemTime> {
+    meta.accessed().ok()
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+fn dua_accessed(_meta: &dua_core::Metadata) -> Option<SystemTime> {
+    None
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn dua_created(meta: &dua_core::Metadata) -> Option<SystemTime> {
+    meta.created().ok()
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+fn dua_created(_meta: &dua_core::Metadata) -> Option<SystemTime> {
+    None
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn dua_readonly(meta: &dua_core::Metadata) -> bool {
+    meta.permissions().readonly()
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+fn dua_readonly(_meta: &dua_core::Metadata) -> bool {
+    false
 }

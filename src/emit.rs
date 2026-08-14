@@ -1,8 +1,11 @@
 use crate::options::WalkOptions;
 use chrono::{DateTime, Local};
-use nu_protocol::{ListStream, PipelineData, ShellError, Signals, Span, Value, record};
+use nu_protocol::{
+    LabeledError, ListStream, PipelineData, ShellError, Signals, Span, Value, record,
+};
 use std::{
     ffi::OsString,
+    fs::Metadata,
     path::{Path, PathBuf},
     sync::mpsc::{SyncSender, sync_channel},
     thread,
@@ -80,14 +83,21 @@ pub fn record_value(entry: WalkedEntry, options: &WalkOptions, span: Span) -> Va
 pub fn error_value(message: String, span: Span) -> Value {
     Value::error(
         ShellError::LabeledError(Box::new(
-            LabeledErrorShim::new(message).with_label("Error found with walk entry", span),
+            LabeledError::new(message).with_label("Error found with walk entry", span),
         )),
         span,
     )
 }
 
-// nu_protocol::LabeledError is used at the command layer; keep this helper local.
-use nu_protocol::LabeledError as LabeledErrorShim;
+pub fn walked_meta_from_std(meta: Metadata) -> WalkedMeta {
+    WalkedMeta {
+        accessed: meta.accessed().ok(),
+        created: meta.created().ok(),
+        modified: meta.modified().ok(),
+        size: meta.len(),
+        readonly: meta.permissions().readonly(),
+    }
+}
 
 fn system_time_value(time: Option<SystemTime>, span: Span) -> Value {
     match time {
@@ -180,6 +190,37 @@ where
             break;
         }
     }
+}
+
+/// Collect-then-sort happens on the walker thread so `run` can still return a live stream.
+pub fn send_maybe_sorted<I>(tx: &SyncSender<WalkItem>, items: I, sort: bool)
+where
+    I: IntoIterator<Item = WalkItem>,
+{
+    if sort {
+        send_walk_iter(tx, maybe_sort_items(items.into_iter().collect(), true));
+    } else {
+        send_walk_iter(tx, items);
+    }
+}
+
+pub fn finish_walk<I>(
+    iter: I,
+    options: WalkOptions,
+    start: Instant,
+    signals: Signals,
+) -> Result<PipelineData, LabeledError>
+where
+    I: Iterator<Item = WalkItem> + Send + 'static,
+{
+    if options.count {
+        let count = iter
+            .filter(|item| matches!(item, WalkItem::Entry(_)))
+            .count() as u64;
+        return Ok(count_pipeline(count, &options, start.elapsed()));
+    }
+
+    Ok(stream_items(iter, options, start, signals))
 }
 
 pub fn maybe_sort_items(mut items: Vec<WalkItem>, sort: bool) -> Vec<WalkItem> {
