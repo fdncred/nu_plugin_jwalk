@@ -17,3 +17,11 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-pc-wind
 install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
+# zlob is optional in Cargo.toml because it needs Zig; ship it in release binaries.
+features = ["zlob"]
+# Install Zig (and libclang on Linux) before `dist build`
+github-build-setup = "github-build-setup.yml"
+
+# bindgen (used by zlob's build.rs) needs libclang; choco already passes --yes
+[dist.dependencies.chocolatey]
+llvm = "*"
