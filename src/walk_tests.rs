@@ -7,7 +7,7 @@ use crate::{
     options::{Engine, WalkOptions, WalkOrder},
     walkdir_backend,
 };
-use nu_protocol::Span;
+use nu_protocol::{Span, Value};
 use std::{
     collections::BTreeSet,
     fs,
@@ -294,6 +294,80 @@ fn metadata_is_optional_on_walked_entries() {
         assert!(
             with_meta.is_some_and(|entry| entry.metadata.is_some()),
             "{engine:?} should populate metadata when requested"
+        );
+    }
+}
+
+#[test]
+fn verbose_record_shape_matches_legacy_columns_for_all_engines() {
+    let dir = fixture_tree();
+    for &engine in ENGINES {
+        let mut opts = options(dir.path(), engine);
+        opts.verbose = true;
+        let value = walk_items(&opts)
+            .into_iter()
+            .find_map(|item| match item {
+                WalkItem::Entry(entry) => Some(crate::emit::item_to_value(
+                    WalkItem::Entry(entry),
+                    &opts,
+                    Span::test_data(),
+                )),
+                WalkItem::Error(err) => panic!("walk error: {err}"),
+            })
+            .expect("walk output should include at least the root entry");
+        let record = value
+            .as_record()
+            .expect("verbose output should be a record");
+        let keys = record.columns().map(String::as_str).collect::<Vec<_>>();
+        assert_eq!(
+            keys,
+            vec![
+                "depth",
+                "client_state",
+                "file_name",
+                "full_path",
+                "is_dir",
+                "is_file",
+                "is_symlink",
+                "parent_path",
+                "path_is_symlink",
+                "accessed",
+                "created",
+                "modified",
+                "size",
+                "readonly",
+            ],
+            "{engine:?} verbose columns diverged from the original output contract"
+        );
+    }
+}
+
+#[test]
+fn verbose_metadata_uses_legacy_size_and_path_symlink_types() {
+    let dir = fixture_tree();
+    for &engine in ENGINES {
+        let mut opts = options(dir.path(), engine);
+        opts.verbose = true;
+        opts.metadata = true;
+        let value = walk_items(&opts)
+            .into_iter()
+            .find_map(|item| match item {
+                WalkItem::Entry(entry) if entry.file_name == "visible.txt" => Some(
+                    crate::emit::item_to_value(WalkItem::Entry(entry), &opts, Span::test_data()),
+                ),
+                _ => None,
+            })
+            .expect("visible.txt should be present in the fixture");
+        let record = value
+            .as_record()
+            .expect("metadata output should be a record");
+        assert!(
+            matches!(record.get("size"), Some(Value::Filesize { .. })),
+            "{engine:?} size should be emitted as a filesize value when metadata is enabled"
+        );
+        assert!(
+            matches!(record.get("path_is_symlink"), Some(Value::String { .. })),
+            "{engine:?} path_is_symlink should remain a string in the legacy verbose record"
         );
     }
 }

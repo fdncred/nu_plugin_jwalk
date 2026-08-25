@@ -58,7 +58,7 @@ pub fn record_value(entry: WalkedEntry, options: &WalkOptions, span: Span) -> Va
         "path_is_symlink" => Value::bool(entry.path_is_symlink, span),
     };
 
-    if options.metadata {
+    if options.verbose || options.metadata {
         match entry.metadata {
             Some(meta) => {
                 rec.push("accessed", system_time_value(meta.accessed, span));
