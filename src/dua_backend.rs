@@ -5,7 +5,7 @@ use crate::{
     },
     options::{WalkOptions, WalkOrder, is_hidden_name},
 };
-use dua_core::{Order, walk};
+use dua_core::{Options, Order, walk};
 use nu_plugin::EngineInterface;
 use nu_protocol::PipelineData;
 use std::time::SystemTime;
@@ -39,7 +39,7 @@ fn dua_iter(options: &WalkOptions) -> impl Iterator<Item = WalkItem> + Send + 's
     };
 
     let walk_options = options.clone();
-    walk(&options.path, threads, order, {
+    walk(&options.path, threads, order, Options::default(), {
         let walk_options = walk_options.clone();
         move |entry| should_descend(entry, &walk_options)
     })
