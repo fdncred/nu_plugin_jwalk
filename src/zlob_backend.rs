@@ -142,7 +142,7 @@ fn to_walked(entry: WalkEntry<'_>, options: &WalkOptions) -> WalkedEntry {
         .unwrap_or_else(|| Path::new(""))
         .to_path_buf();
 
-    let metadata = if options.metadata {
+    let metadata = if options.verbose {
         Some(WalkedMeta {
             accessed: ns_to_system_time(entry.accessed_ns()),
             created: ns_to_system_time(entry.created_ns()),
