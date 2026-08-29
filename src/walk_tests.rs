@@ -52,7 +52,6 @@ fn options(root: &Path, engine: Engine) -> WalkOptions {
         threads: Some(2),
         skip_dirs: Arc::from([]),
         verbose: false,
-        metadata: false,
         count: false,
         debug: false,
         order: WalkOrder::Completion,
@@ -285,7 +284,7 @@ fn metadata_is_optional_on_walked_entries() {
         );
 
         let mut opts = options(dir.path(), engine);
-        opts.metadata = true;
+        opts.verbose = true;
         let with = walk_items(&opts);
         let with_meta = with.iter().find_map(|item| match item {
             WalkItem::Entry(entry) => Some(entry),
@@ -293,7 +292,7 @@ fn metadata_is_optional_on_walked_entries() {
         });
         assert!(
             with_meta.is_some_and(|entry| entry.metadata.is_some()),
-            "{engine:?} should populate metadata when requested"
+            "{engine:?} should populate metadata when verbose is set"
         );
     }
 }
@@ -348,7 +347,6 @@ fn verbose_metadata_uses_legacy_size_and_path_symlink_types() {
     for &engine in ENGINES {
         let mut opts = options(dir.path(), engine);
         opts.verbose = true;
-        opts.metadata = true;
         let value = walk_items(&opts)
             .into_iter()
             .find_map(|item| match item {
@@ -366,8 +364,8 @@ fn verbose_metadata_uses_legacy_size_and_path_symlink_types() {
             "{engine:?} size should be emitted as a filesize value when metadata is enabled"
         );
         assert!(
-            matches!(record.get("path_is_symlink"), Some(Value::String { .. })),
-            "{engine:?} path_is_symlink should remain a string in the legacy verbose record"
+            matches!(record.get("path_is_symlink"), Some(Value::Bool { .. })),
+            "{engine:?} path_is_symlink should be a bool value"
         );
     }
 }
@@ -376,7 +374,7 @@ fn verbose_metadata_uses_legacy_size_and_path_symlink_types() {
 fn dua_metadata_includes_size_and_mtime() {
     let dir = fixture_tree();
     let mut opts = options(dir.path(), Engine::Dua);
-    opts.metadata = true;
+    opts.verbose = true;
     let with = walk_items(&opts);
     let file = with.iter().find_map(|item| match item {
         WalkItem::Entry(entry) if entry.file_name == "visible.txt" => Some(entry),

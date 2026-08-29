@@ -85,7 +85,7 @@ enum Classified {
 }
 
 fn classify_entry(entry: DirEntry, options: &WalkOptions) -> Classified {
-    let walked = to_walked(entry, options.metadata);
+    let walked = to_walked(entry, options.verbose);
     let skip_dir = walked.is_dir && options.should_skip_dir_name(&walked.file_name);
     let item = WalkItem::Entry(walked);
     if is_root_item(&item, &options.path) {

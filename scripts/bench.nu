@@ -7,7 +7,7 @@
 #
 # Fairness: dua-core always stats entries while walking. jwalk, ignore,
 # walkdir, and zlob --count / path listing do not, so they can look faster.
-# verbose+metadata is the closer apples-to-apples comparison.
+# verbose is the closer apples-to-apples comparison.
 #
 # zlob is included only when this plugin was built with --features zlob.
 #
@@ -43,8 +43,8 @@ def main [
         $rows = ($rows | append (bench-case $root $engine $threads $runs "paths" {||
             jwalk --engine $engine --threads $threads $root
         }))
-        $rows = ($rows | append (bench-case $root $engine $threads $runs "verbose+meta" {||
-            jwalk --engine $engine --verbose --metadata --threads $threads $root
+        $rows = ($rows | append (bench-case $root $engine $threads $runs "verbose" {||
+            jwalk --engine $engine --verbose --threads $threads $root
         }))
     }
 

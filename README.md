@@ -48,22 +48,19 @@ jwalk --engine zlob --count --skip-hidden --skip-dir [target node_modules .git] 
 # Shallow listing (serial)
 jwalk --engine zlob --skip-hidden --max-depth 1 --threads 0 (pwd)
 
-# Verbose columns without extra stat syscalls
-jwalk --engine zlob --verbose --skip-hidden --skip-dir [target] (pwd)
-
 # Verbose columns including size and times
-jwalk --engine zlob --verbose --metadata --skip-hidden (pwd)
+jwalk --engine zlob --verbose --skip-hidden (pwd)
 ```
 
-Avoid `--sort`, `--follow-links`, `--custom`, and `--verbose --metadata` when you only need paths.
+Avoid `--sort`, `--follow-links`, `--custom`, and `--verbose` when you only need paths.
 
 ## Engines
 
 | | `jwalk` (default) | `dua` | `ignore` | `walkdir` | `zlob` (`--features zlob`) |
 |---|---|---|---|---|---|
 | Parallelism | Rayon | work-stealing pool (`crossbeam`) | `WalkParallel` unless `--sort` or `--threads 0`/`1` | always serial | zlob worker pool |
-| Path listing | no extra `stat` | native dir metadata on macOS/Windows; extra `stat` on Linux | no extra `stat` unless `--metadata` | no extra `stat` unless `--metadata` | no extra `stat` unless `--metadata` |
-| `--metadata` | extra syscall per entry | collected during the walk (size + mtime everywhere; atime/ctime/readonly on Linux) | extra syscall per entry | extra syscall per entry | optional, fetched during the walk |
+| Path listing | no extra `stat` | native dir metadata on macOS/Windows; extra `stat` on Linux | no extra `stat` unless `--verbose` | no extra `stat` unless `--verbose` | no extra `stat` unless `--verbose` |
+| `--verbose` | extra syscall per entry | collected during the walk (size + mtime everywhere; atime/ctime/readonly on Linux) | extra syscall per entry | extra syscall per entry | optional, fetched during the walk |
 | `--sort` | per-directory sort while streaming | collect on walker thread, then sort by file name | forces serial per-directory sort while streaming | per-directory sort while streaming | collect on walker thread, then sort by file name |
 | `--follow-links` | supported | not supported | supported | supported | supported |
 | `--custom` | `process_read_dir` demo | not supported | not supported | not supported | not supported |
@@ -72,7 +69,7 @@ Avoid `--sort`, `--follow-links`, `--custom`, and `--verbose --metadata` when yo
 
 `dua-core` 3.0 still never follows symlinks. On macOS and Windows it reads type, size, and mtime from the directory listing (`getattrlistbulk` / `FileIdBothDirectoryInfo`) instead of a per-entry `stat`. Linux still stats after `readdir`. `--order` is still the dua-only scheduling switch (`completion` vs `parent-first`). Multi-root `walk_roots` is unused because this command walks one path. dua-cli's `--ignore-from` is a CLI feature, not part of `dua-core`.
 
-`dua` can look slower on Linux path-only / `--count` walks because it still reads metadata there. The other engines skip that syscall unless you pass `--metadata`.
+`dua` can look slower on Linux path-only / `--count` walks because it still reads metadata there. The other engines skip that syscall unless you pass `--verbose`.
 
 The `ignore` engine uses the same walker as ripgrep, but **gitignore / `.ignore` / hidden filters are off** so `--skip-hidden` and `--skip-dir` match the other engines. Hidden names are skipped only when you pass `--skip-hidden`.
 
@@ -84,8 +81,7 @@ The `ignore` engine uses the same walker as ripgrep, but **gitignore / `.ignore`
 jwalk {flags} <path>
 
   --engine <jwalk|dua|ignore|walkdir|zlob>   walk engine (default jwalk)
-  --verbose                   multi-column output without extra metadata syscalls
-  --metadata                  include size, times, readonly (implies record output)
+  --verbose                   multi-column output with size, times, and readonly
   --sort                      sort by file name (does not delay the stream)
   --skip-hidden               skip names that start with '.'
   --skip-dir <list>           yield these directory names but do not descend
@@ -100,7 +96,7 @@ jwalk {flags} <path>
 
 ## Benchmarks
 
-`scripts/bench.nu` times every compiled engine on the same tree (count, count+skip, paths, verbose+metadata). It probes `--engine zlob` and skips that engine when the plugin was built without the `zlob` feature:
+`scripts/bench.nu` times every compiled engine on the same tree (count, count+skip, paths, verbose). It probes `--engine zlob` and skips that engine when the plugin was built without the `zlob` feature:
 
 ```nushell
 run scripts/bench.nu ~/src/nushell --threads 8 --runs 5
@@ -119,7 +115,7 @@ jwalk --debug --max-depth 1 --threads 2 (pwd)
 Verbose records with metadata:
 
 ```nushell
-jwalk --engine zlob --verbose --metadata --max-depth 1 (pwd)
+jwalk --engine zlob --verbose --max-depth 1 (pwd)
 ```
 ## Benchmarks
 #### count
@@ -134,9 +130,9 @@ jwalk --engine $engine --count --skip-hidden --skip-dir [target .git] --threads 
 ```nushell
 jwalk --engine $engine --threads $threads $root
 ```
-#### verbose+meta
+#### verbose
 ```nushell
-jwalk --engine $engine --verbose --metadata --threads $threads $root
+jwalk --engine $engine --verbose --threads $threads $root
 ```
 
 ## Real-world results using the bench.nu on the nushell repo
@@ -158,10 +154,10 @@ Manuall Sorted (* = winner in each category)
 │ 10 │ jwalk   │ paths        │ 803,868 │  1,669.90 │   1,760.07 │         456,724 │
 │ 14 │ walkdir*│ paths        │ 803,868 │  1,565.31 │   1,625.07 │         494,667 │
 │ 18 │ zlob    │ paths        │ 803,868 │  3,275.56 │   3,321.28 │         242,036 │
-│ 3  │ dua     │ verbose+meta │ 803,868 │ 15,864.32 │  16,130.63 │          49,835 │
-│ 7  │ ignore *│ verbose+meta │ 803,868 │  7,392.89 │   7,771.23 │         103,442 │
-│ 11 │ jwalk   │ verbose+meta │ 803,868 │ 21,140.78 │  21,542.28 │          37,316 │
-│ 15 │ walkdir │ verbose+meta │ 803,868 │ 21,599.72 │  21,796.54 │          36,881 │
-│ 19 │ zlob    │ verbose+meta │ 803,868 │ 10,898.72 │  10,930.55 │          73,543 │
-╰─#──┴─engine──┴─────case─────┴─entries─┴───min_ms──┴──median_ms─┴─entries_per_sec─╯
+│ 3  │ dua     │ verbose      │ 803,868 │ 15,864.32 │  16,130.63 │          49,835 │
+│ 7  │ ignore *│ verbose      │ 803,868 │  7,392.89 │   7,771.23 │         103,442 │
+│ 11 │ jwalk   │ verbose      │ 803,868 │ 21,140.78 │  21,542.28 │          37,316 │
+│ 15 │ walkdir │ verbose      │ 803,868 │ 21,599.72 │  21,796.54 │          36,881 │
+│ 19 │ zlob    │ verbose      │ 803,868 │ 10,898.72 │  10,930.55 │          73,543 │
+╰─#──┴─engine──┴─────case─────┴─entries─┴───min_ms──┬──median_ms─┬─entries_per_sec─╯
 ```

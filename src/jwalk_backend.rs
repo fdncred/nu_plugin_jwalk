@@ -36,7 +36,7 @@ pub(crate) fn walk_items(options: &WalkOptions) -> impl Iterator<Item = WalkItem
 fn jwalk_iter(options: &WalkOptions) -> impl Iterator<Item = WalkItem> + Send + 'static {
     let parallelism = jwalk_parallelism(options);
     let skip_dirs = Arc::clone(&options.skip_dirs);
-    let want_metadata = options.metadata;
+    let want_metadata = options.verbose;
     let span_path = options.path.clone();
 
     WalkDir::new(&span_path)
@@ -68,7 +68,7 @@ fn walk_custom(options: &WalkOptions) -> impl Iterator<Item = WalkItem> + Send +
 
 fn custom_iter(options: &WalkOptions) -> impl Iterator<Item = WalkItem> + Send + 'static {
     let parallelism = jwalk_parallelism(options);
-    let want_metadata = options.metadata;
+    let want_metadata = options.verbose;
     WalkDirGeneric::<(usize, bool)>::new(&options.path)
         .process_read_dir(|_depth, _path, read_dir_state, children| {
             children.sort_by(|a, b| match (a, b) {

@@ -39,7 +39,7 @@ impl PluginCommand for Implementation {
     }
 
     fn extra_description(&self) -> &str {
-        "jwalk is the default engine and can list paths without an extra stat. ignore and walkdir also skip that stat unless --metadata is set. dua always reads metadata while walking. zlob is available only when this plugin is built with --features zlob (requires zig). --custom requires --engine jwalk. --follow-links works with every engine except dua. Every engine streams results; --sort never blocks returning the stream."
+        "jwalk is the default engine and can list paths without an extra stat. ignore and walkdir also skip that stat unless --verbose is set. dua always reads metadata while walking. zlob is available only when this plugin is built with --features zlob (requires zig). --custom requires --engine jwalk. --follow-links works with every engine except dua. Every engine streams results; --sort never blocks returning the stream."
     }
 
     fn signature(&self) -> Signature {
@@ -53,13 +53,8 @@ impl PluginCommand for Implementation {
             )
             .switch(
                 "verbose",
-                "multi-column output without extra metadata syscalls",
+                "multi-column output with size, times, and readonly",
                 Some('v'),
-            )
-            .switch(
-                "metadata",
-                "include size, times, and readonly (implies verbose records)",
-                None,
             )
             .switch("sort", "sort by file name", Some('s'))
             .switch(
@@ -154,13 +149,8 @@ impl PluginCommand for Implementation {
                 result: None,
             },
             Example {
-                description: "Verbose columns without extra stat syscalls on jwalk",
-                example: "jwalk --verbose --skip-hidden --skip-dir [target] (pwd)",
-                result: None,
-            },
-            Example {
-                description: "Verbose columns including size and times",
-                example: "jwalk --verbose --metadata --skip-hidden (pwd)",
+                description: "Verbose columns with metadata (size, times, readonly)",
+                example: "jwalk --verbose --skip-hidden (pwd)",
                 result: None,
             },
         ]
@@ -227,7 +217,6 @@ fn parse_options(
         threads: optional_threads(call.get_flag("threads")?, span)?,
         skip_dirs: Arc::from(skip_dirs),
         verbose: call.has_flag("verbose")?,
-        metadata: call.has_flag("metadata")?,
         count: call.has_flag("count")?,
         debug: call.has_flag("debug")?,
         order,

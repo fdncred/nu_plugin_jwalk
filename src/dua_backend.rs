@@ -48,7 +48,7 @@ fn dua_iter(options: &WalkOptions) -> impl Iterator<Item = WalkItem> + Send + 's
             if !should_yield(&entry, &walk_options) {
                 return None;
             }
-            Some(WalkItem::Entry(to_walked(entry, walk_options.metadata)))
+            Some(WalkItem::Entry(to_walked(entry, walk_options.verbose)))
         }
         Err(err) => Some(WalkItem::Error(err.to_string())),
     })

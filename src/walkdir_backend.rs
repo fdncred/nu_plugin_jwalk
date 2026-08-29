@@ -63,7 +63,7 @@ fn stream_walk(tx: &SyncSender<WalkItem>, options: &WalkOptions) {
         }
 
         if tx
-            .send(WalkItem::Entry(to_walked(entry, options.metadata)))
+            .send(WalkItem::Entry(to_walked(entry, options.verbose)))
             .is_err()
         {
             break;

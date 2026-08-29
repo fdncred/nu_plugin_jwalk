@@ -58,7 +58,7 @@ pub fn record_value(entry: WalkedEntry, options: &WalkOptions, span: Span) -> Va
         "path_is_symlink" => Value::bool(entry.path_is_symlink, span),
     };
 
-    if options.verbose || options.metadata {
+    if options.verbose {
         match entry.metadata {
             Some(meta) => {
                 rec.push("accessed", system_time_value(meta.accessed, span));
@@ -68,11 +68,11 @@ pub fn record_value(entry: WalkedEntry, options: &WalkOptions, span: Span) -> Va
                 rec.push("readonly", Value::bool(meta.readonly, span));
             }
             None => {
-                rec.push("accessed", Value::string(String::new(), span));
-                rec.push("created", Value::string(String::new(), span));
-                rec.push("modified", Value::string(String::new(), span));
+                rec.push("accessed", Value::string("no-metadata".to_string(), span));
+                rec.push("created", Value::string("no-metadata".to_string(), span));
+                rec.push("modified", Value::string("no-metadata".to_string(), span));
                 rec.push("size", Value::int(0, span));
-                rec.push("readonly", Value::string(String::new(), span));
+                rec.push("readonly", Value::string("no-metadata".to_string(), span));
             }
         }
     }
@@ -112,7 +112,7 @@ fn system_time_value(time: Option<SystemTime>, span: Span) -> Value {
 pub fn item_to_value(item: WalkItem, options: &WalkOptions, span: Span) -> Value {
     match item {
         WalkItem::Error(message) => error_value(message, span),
-        WalkItem::Entry(entry) if options.records() => record_value(entry, options, span),
+        WalkItem::Entry(entry) if options.verbose => record_value(entry, options, span),
         WalkItem::Entry(entry) => path_value(&entry, span),
     }
 }
@@ -120,7 +120,7 @@ pub fn item_to_value(item: WalkItem, options: &WalkOptions, span: Span) -> Value
 pub fn walk_root_entry(options: &WalkOptions) -> WalkedEntry {
     let meta = std::fs::symlink_metadata(&options.path).ok();
     let file_type = meta.as_ref().map(|m| m.file_type());
-    let metadata = if options.metadata {
+    let metadata = if options.verbose {
         meta.as_ref().map(|m| WalkedMeta {
             accessed: m.accessed().ok(),
             created: m.created().ok(),

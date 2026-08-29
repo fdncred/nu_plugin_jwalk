@@ -35,7 +35,7 @@ fn stream_walk(tx: &SyncSender<WalkItem>, options: &WalkOptions) -> Result<(), S
     builder.options(walk_flags(options));
     builder.threads(zlob_threads(options));
     builder.max_depth(zlob_max_depth(options));
-    if options.metadata {
+    if options.verbose {
         builder.metadata(
             WalkMetadata::SIZE
                 | WalkMetadata::MTIME

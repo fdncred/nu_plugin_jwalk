@@ -114,17 +114,12 @@ pub struct WalkOptions {
     pub threads: Option<usize>,
     pub skip_dirs: Arc<[OsString]>,
     pub verbose: bool,
-    pub metadata: bool,
     pub count: bool,
     pub debug: bool,
     pub order: WalkOrder,
 }
 
 impl WalkOptions {
-    pub fn records(&self) -> bool {
-        self.verbose || self.metadata
-    }
-
     pub fn validate(&self) -> Result<(), LabeledError> {
         if self.follow_links && !self.engine.supports_follow_links() {
             return Err(
@@ -142,7 +137,7 @@ impl WalkOptions {
                 ),
             );
         }
-        if self.custom && !self.records() {
+        if self.custom && !self.verbose {
             return Err(LabeledError::new("Please remove the custom flag")
                 .with_label("Custom walker only supported with verbose mode", self.span));
         }
@@ -159,7 +154,7 @@ impl WalkOptions {
             None => String::new(),
         };
         format!(
-            "Running with these options:\n  engine: {}\n  order: {}\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n  skip_dirs: {:?}\n  metadata: {}\nTime: {elapsed:?}{count_line}",
+            "Running with these options:\n  engine: {}\n  order: {}\n  sort: {}\n  skip_hidden: {}\n  follow_links: {}\n  min_depth: {}\n  max_depth: {}\n  threads: {:?}\n  skip_dirs: {:?}\n  verbose: {}\nTime: {elapsed:?}{count_line}",
             self.engine.as_str(),
             self.order.as_str(),
             self.sort,
@@ -169,7 +164,7 @@ impl WalkOptions {
             self.max_depth,
             self.threads,
             self.skip_dirs,
-            self.metadata,
+            self.verbose,
         )
     }
 }
