@@ -90,7 +90,11 @@ fn should_yield(entry: &dua_core::Entry, options: &WalkOptions) -> bool {
 
 fn to_walked(entry: dua_core::Entry, want_metadata: bool) -> WalkedEntry {
     let metadata = if want_metadata {
-        entry.metadata.as_ref().ok().map(walked_meta_from_dua)
+        entry
+            .metadata
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .map(walked_meta_from_dua)
     } else {
         None
     };
