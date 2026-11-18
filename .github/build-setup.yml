@@ -1,0 +1,15 @@
+- name: Install Zig
+  uses: mlugg/setup-zig@v2
+  with:
+    version: "0.16.0"
+- name: Install libclang (Linux)
+  if: ${{ runner.os == 'Linux' }}
+  shell: bash
+  run: |
+    if command -v sudo >/dev/null 2>&1; then
+      sudo apt-get update
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libclang-dev
+    else
+      apt-get update
+      DEBIAN_FRONTEND=noninteractive apt-get install -y libclang-dev
+    fi
