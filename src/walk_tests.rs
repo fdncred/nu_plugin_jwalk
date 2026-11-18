@@ -305,14 +305,13 @@ fn verbose_record_shape_matches_legacy_columns_for_all_engines() {
         opts.verbose = true;
         let value = walk_items(&opts)
             .into_iter()
-            .find_map(|item| match item {
-                WalkItem::Entry(entry) => Some(crate::emit::item_to_value(
-                    WalkItem::Entry(entry),
-                    &opts,
-                    Span::test_data(),
-                )),
+            .map(|item| match item {
+                WalkItem::Entry(entry) => {
+                    crate::emit::item_to_value(WalkItem::Entry(entry), &opts, Span::test_data())
+                }
                 WalkItem::Error(err) => panic!("walk error: {err}"),
             })
+            .next()
             .expect("walk output should include at least the root entry");
         let record = value
             .as_record()
