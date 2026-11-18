@@ -25,3 +25,7 @@ github-build-setup = "../build-setup.yml"
 # bindgen (used by zlob's build.rs) needs libclang; choco already passes --yes
 [dist.dependencies.chocolatey]
 llvm = "*"
+
+[dist.github-custom-runners]
+# GitHub retired the macos-14 image that dist 0.32 picks for this target.
+aarch64-apple-darwin = "macos-latest"
